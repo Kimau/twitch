@@ -12,9 +12,9 @@ import (
 
 var (
 	authTemp        *template.Template
-	authSignRegEx   = regexp.MustCompile("/twitch/signin/([\\w]+)/")
-	authRegEx       = regexp.MustCompile("/twitch/after_signin/([\\w]+)/?code=([\\w-]+)&scope=([\\w-]+)&state=([\\w-]+)")
-	authCancelRegEx = regexp.MustCompile("/twitch/after_signin/([\\w]+)/")
+	authSignRegEx   = regexp.MustCompile("/twitch/signin/([\\w]+)/*")
+	authRegEx       = regexp.MustCompile("/twitch/after_signin/\\?code=([\\w-]+)&scope=([\\w-+]+)&state=([\\w-]+)")
+	authCancelRegEx = regexp.MustCompile("/twitch/after_signin/*")
 
 	// ValidScopes is a list of valid scopes your allowed
 	// "channel_check_subscription" - Read whether a user is subscribed to your channel.
@@ -48,7 +48,7 @@ var (
 		"user_subscriptions",
 	}
 
-	// Good set of scopes for Streamer Login
+	// DefaultStreamerScope - Good set of scopes for Streamer Login
 	DefaultStreamerScope = []string{
 		"channel_check_subscription",
 		"channel_editor",
@@ -67,7 +67,7 @@ var (
 const (
 	baseURL  = "https://api.twitch.tv/kraken/oauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
 	clientID = "qhaf2djfhvkohczx08oyqra51hjasn"
-	redirURL = "http://localhost:30006/twitch/signin/" //"https://twitch.otg-gt.xyz/twitch/after_signin/"
+	redirURL = "http://localhost:30006/twitch/after_signin/" //"https://twitch.otg-gt.xyz/twitch/after_signin/"
 )
 
 // Client - Twitch OAuth Client
