@@ -2,6 +2,7 @@ package twitch
 
 import (
 	"fmt"
+	"strings"
 )
 
 /*  v5 User Calls
@@ -89,14 +90,14 @@ func (u *UsersMethod) Get(id string) (*User, error) {
 }
 
 // GetByName - Get User by v3 Name
-func (u *UsersMethod) GetByName(name string) (*User, error) {
+func (u *UsersMethod) GetByName(names []string) ([]User, error) {
 
 	uList := struct {
 		Total    int    `json:"_total"`
 		UserList []User `json:"users"`
 	}{}
 
-	_, err := u.client.Get("users?login="+name, &uList)
+	_, err := u.client.Get("users?login="+strings.Join(names, ","), &uList)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +106,7 @@ func (u *UsersMethod) GetByName(name string) (*User, error) {
 		return nil, fmt.Errorf("Total Number of Users was: %d", uList.Total)
 	}
 
-	return &uList.UserList[0], nil
+	return uList.UserList, nil
 }
 
 // EmoteList - Get User Emotes

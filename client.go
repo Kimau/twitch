@@ -24,6 +24,8 @@ const (
 
 	listenRoot = "/twitch/"
 
+	pageLimit = 100
+
 	scopeChannelCheckSubscription = "channel_check_subscription" // "channel_check_subscription" - Read whether a user is subscribed to your channel.
 	scopeChannelCommercial        = "channel_commercial"         // "channel_commercial"         - Trigger commercials on channel.
 	scopeChannelEditor            = "channel_editor"             // "channel_editor"             - Write channel metadata (game, status, etc).
@@ -81,8 +83,9 @@ type Client struct {
 
 	httpClient *http.Client
 	url        *url.URL
+
 	hasAuth    bool
-	username   string
+	oauthState string
 	authcode   string
 	scopes     map[string]bool
 
@@ -117,20 +120,31 @@ func CreateTwitchClient(wf *web.WebFace, reqScopes []string) (*Client, error) {
 	}
 
 	kb.User = &UsersMethod{client: &kb}
+	kb.oauthState = GenerateRandomString(32)
 	wf.Router.Handle(listenRoot, &kb)
 
 	return &kb, nil
 }
 
 func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+
+	// Get Relative Path
 	relPath := req.URL.Path[strings.Index(req.URL.Path, listenRoot)+len(listenRoot):]
 	log.Println("Twitch: ", relPath)
 
+	// Force Auth
+	if ah.hasAuth == false {
+		if strings.HasPrefix(relPath, "after_signin") {
+			ah.handleOAuthResult(w, req)
+		} else {
+			ah.handleOAuthStart(w, req)
+		}
+
+		return
+	}
+
 	switch {
-	case strings.HasPrefix(relPath, "signin"):
-		ah.handleOAuthStart(w, req)
-	case strings.HasPrefix(relPath, "after_signin"):
-		ah.handleOAuthResult(w, req)
+
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()
 		if err != nil {

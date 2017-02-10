@@ -3,7 +3,6 @@ package twitch
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -17,12 +16,8 @@ var (
 )
 
 func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
-	match := authSignRegEx.FindStringSubmatch(req.URL.Path)
-	if match != nil {
-		fullRedirStr := fmt.Sprintf(baseURL, rootURL, clientID, redirURL, ah.getScopeString(), match[1])
-		http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
-		return
-	}
+	fullRedirStr := fmt.Sprintf(baseURL, rootURL, clientID, redirURL, ah.getScopeString(), ah.oauthState)
+	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
 }
 
 func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
@@ -39,8 +34,8 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	nameList, ok := qList["state"]
-	if !ok {
+	stateList, ok := qList["state"]
+	if !ok || stateList[0] != ah.oauthState {
 		http.Error(w, "Invalid State", 400)
 		return
 	}
@@ -54,7 +49,6 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 
 	// Save State
 	ah.hasAuth = false
-	ah.username = nameList[0]
 	ah.authcode = c[0]
 	for k := range ah.scopes {
 		ah.scopes[k] = false
@@ -70,7 +64,7 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", redirURL)
 	data.Set("code", ah.authcode)
-	data.Set("state", ah.username)
+	data.Set("state", ah.oauthState)
 	payload := strings.NewReader(data.Encode())
 
 	// Server get Auth Code
@@ -97,14 +91,8 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Dump Output
-	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
-
-	fmt.Fprintf(w, "Output: %s", string(body))
-	return
-
 	// Decode JSON
+	defer resp.Body.Close()
 	tokenStruct := struct {
 		Token   string `json:"access_token"`
 		Refresh string `json:"refresh_token"`
@@ -120,8 +108,7 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 
 	// Output Result
 	fmt.Fprintf(w,
-		"Hello %s your code is [%s] and you have been allowed these scopes\n",
-		ah.username, ah.authcode)
+		"Hello your code is [%s] and you have been allowed these scopes\n", ah.authcode)
 
 	for k, v := range ah.scopes {
 		fmt.Fprintf(w, "* %s: %v \n", k, v)
