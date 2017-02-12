@@ -15,9 +15,98 @@ var (
 	authSignRegEx = regexp.MustCompile("/twitch/signin/([\\w]+)/*")
 )
 
-func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
-	fullRedirStr := fmt.Sprintf(baseURL, rootURL, clientID, redirURL, ah.getScopeString(), ah.oauthState)
+// UserAuth - Used to manage OAuth for Logins
+type UserAuth struct {
+	TwitchID string
+	User     *User
+
+	hasAuth    bool
+	oauthState string
+	authcode   string
+	scopes     map[string]bool
+}
+
+func makeUserAuth(id string, reqScopes []string) *UserAuth {
+	newScope := make(map[string]bool)
+	for _, ov := range ValidScopes {
+		newScope[ov] = false
+		for _, v := range reqScopes {
+			if v == ov {
+				newScope[ov] = true
+			}
+		}
+	}
+
+	au := UserAuth{
+		TwitchID: id,
+		User:     nil,
+
+		hasAuth:    false,
+		oauthState: GenerateRandomString(16),
+		scopes:     newScope,
+	}
+
+	return &au
+}
+
+func (ua *UserAuth) getScopeString() string {
+	if ua.scopes == nil {
+		return ""
+	}
+
+	s := ""
+	for k, v := range ua.scopes {
+		if v {
+			s += k + "+"
+		}
+	}
+
+	s = strings.TrimRight(s, "+")
+
+	return s
+}
+
+func (ua *UserAuth) updateScope(scopeList []string) {
+	for k := range ua.scopes {
+		ua.scopes[k] = false
+	}
+	for _, k := range scopeList {
+		ua.scopes[k] = true
+	}
+}
+
+func (ua *UserAuth) checkScope(reqScopes ...string) error {
+	for _, v := range reqScopes {
+		if ua.scopes[v] == false {
+			return fmt.Errorf("Scope Required: %s", v)
+		}
+	}
+
+	return nil
+}
+
+func (ua *UserAuth) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
+	if ua.hasAuth {
+		http.Error(w, "Already logged in admin", http.StatusConflict)
+		return
+	}
+
+	fullRedirStr := fmt.Sprintf(baseURL, rootURL, clientID, redirURL, ua.getScopeString(), ua.oauthState)
 	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
+}
+
+func (ah *Client) findUserByState(state string) *UserAuth {
+	if ah.AdminAuth.oauthState == state {
+		return ah.AdminAuth
+	}
+
+	for _, v := range ah.AuthUsers {
+		if v.oauthState == state {
+			return v
+		}
+	}
+
+	return nil
 }
 
 func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
@@ -35,8 +124,14 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 	}
 
 	stateList, ok := qList["state"]
-	if !ok || stateList[0] != ah.oauthState {
+	if !ok {
 		http.Error(w, "Invalid State", 400)
+		return
+	}
+
+	authU := ah.findUserByState(stateList[0])
+	if authU == nil {
+		http.Error(w, "Invalid Auth State", 400)
 		return
 	}
 
@@ -48,14 +143,9 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 	scopeList = strings.Split(scopeList[0], " ")
 
 	// Save State
-	ah.hasAuth = false
-	ah.authcode = c[0]
-	for k := range ah.scopes {
-		ah.scopes[k] = false
-	}
-	for _, k := range scopeList {
-		ah.scopes[k] = true
-	}
+	authU.hasAuth = false
+	authU.updateScope(scopeList)
+	authU.authcode = c[0]
 
 	// Setup Payload
 	data := url.Values{}
@@ -63,8 +153,8 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 	data.Set("client_secret", clientSecret)
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", redirURL)
-	data.Set("code", ah.authcode)
-	data.Set("state", ah.oauthState)
+	data.Set("code", authU.authcode)
+	data.Set("state", authU.oauthState)
 	payload := strings.NewReader(data.Encode())
 
 	// Server get Auth Code
@@ -103,15 +193,9 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ah.authcode = tokenStruct.Token
-	ah.hasAuth = true
+	authU.authcode = tokenStruct.Token
+	authU.hasAuth = true
 
 	// Output Result
-	fmt.Fprintf(w,
-		"Hello your code is [%s] and you have been allowed these scopes\n", ah.authcode)
-
-	for k, v := range ah.scopes {
-		fmt.Fprintf(w, "* %s: %v \n", k, v)
-	}
-
+	fmt.Fprint(w, "You are logged in")
 }

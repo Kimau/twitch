@@ -32,7 +32,7 @@ type Channel struct {
 	ProfileBanner      string `json:"profile_banner,omitempty"`                  // : null
 	ProfileBannerColor string `json:"profile_banner_background_color,omitempty"` // : null
 	Status             string `json:"status,omitempty"`                          // : "The Finalest of Fantasies"
-	Url                string `json:"url,omitempty"`                             // : "https://www.twitch.tv/dallas"
+	URL                string `json:"url,omitempty"`                             // : "https://www.twitch.tv/dallas"
 	VideoBanner        string `json:"video_banner,omitempty"`                    // : null
 
 	Followers int `json:"followers,omitempty"` // : 40
@@ -52,25 +52,36 @@ type ChannelFull struct {
 	StreamKey string `json:"stream_key,omitempty"` // "live_44322889_nCGwsCl38pt21oj4UJJZbFQ9nrVIU5",
 }
 
-// ChannelSub - Subscription to Channel
-type ChannelSub struct {
-    ID          string `json:"_id"`
-    CreatedAtString string `json:"created_at"` // 2013-06-03T19:12:02Z
-User *User `json:"user"`
+// ChannelRelationship - Useful for Queries
+type ChannelRelationship struct {
+	ID              string   `json:"_id"`
+	CreatedAtString string   `json:"created_at"` // 2013-06-03T19:12:02Z
+	Notifications   bool     `json:"notifications"`
+	User            *User    `json:"user,omitempty"`
+	Channel         *Channel `json:"channel,omitempty"`
 }
 
+// ChannelFollow - Follow Relationship
+type ChannelFollow ChannelRelationship
+
+// ChannelSub - Sub Relationship
+type ChannelSub ChannelRelationship
+
+// ChannelsMethod - The functions for Channels
 type ChannelsMethod struct {
 	client *Client
+	au     *UserAuth
 }
 
 // GetMe - Get Channel with Full Auth
 func (c *ChannelsMethod) GetMe() (*ChannelFull, error) {
-	if c.client.scopes[scopeUserRead] == false {
-		return nil, fmt.Errorf("Scope Required: %s", scopeChannelRead)
+	err := c.au.checkScope(scopeChannelRead)
+	if err != nil {
+		return nil, err
 	}
 
 	var channel ChannelFull
-	_, err := c.client.Get("channels", &channel)
+	_, err = c.client.Get(c.au, "channels", &channel)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +92,7 @@ func (c *ChannelsMethod) GetMe() (*ChannelFull, error) {
 // Get - Get Channel by ID
 func (c *ChannelsMethod) Get(id string) (*Channel, error) {
 	var channel Channel
-	_, err := c.client.Get("channels/"+id, &channel)
+	_, err := c.client.Get(c.au, "channels/"+id, &channel)
 	if err != nil {
 		return nil, err
 	}
@@ -89,73 +100,123 @@ func (c *ChannelsMethod) Get(id string) (*Channel, error) {
 	return &channel, nil
 }
 
-// func (c *ChannelsMethod) Update(id string) (*Channel , error)              {}
-
+// GetEditors - Return list of users allow to edit the channel
 func (c *ChannelsMethod) GetEditors(id string) ([]User, error) {
-	if c.client.scopes[scopeUserRead] == false {
-		return nil, fmt.Errorf("Scope Required: %s", scopeChannelRead)
-	}
-
-	editorList := struct {
-		Total    int    `json:"_total,omitempty"`
-		UserList []User `json:"users"`
-	}{}
-
-	_, err := c.client.Get("channels/"+id+"/editors", &editorList)
+	err := c.au.checkScope(scopeChannelRead)
 	if err != nil {
 		return nil, err
 	}
 
-	return editorList.UserList, nil
-}
-
-func (c *ChannelsMethod) GetFollowers(id string) (*Channel, error)   ([]User, error) {
-	if c.client.scopes[scopeUserRead] == false {
-		return nil, fmt.Errorf("Scope Required: %s", scopeChannelRead)
-	}
-
-	editorList := struct {
-		Total    int    `json:"_total,omitempty"`
+	uList := struct {
+		Total    int    `json:"_total"`
 		UserList []User `json:"users"`
 	}{}
 
-	_, err := c.client.Get("channels/"+id+"/editors", &editorList)
+	_, err = c.client.Get(c.au, fmt.Sprintf("channels/%s/editors", id), &uList)
 	if err != nil {
 		return nil, err
 	}
 
-	return editorList.UserList, nil
+	if uList.Total != 1 {
+		return nil, fmt.Errorf("Total Number of Users was: %d", uList.Total)
+	}
+
+	return uList.UserList, nil
 }
 
-// GetSubscribers - Get all subs to channel id 
+// GetFollowers - Returns the Followers for a Channel
+func (c *ChannelsMethod) GetFollowers(id string, limit int, newestFirst bool) ([]ChannelFollow, int, error) {
+
+	reqPageLimit := limit
+	if limit < 0 {
+		reqPageLimit = 100
+	} else if reqPageLimit > pageLimit {
+		// Only support up to pageLimit
+		reqPageLimit = pageLimit
+	}
+
+	reqOrder := "asc"
+	if newestFirst {
+		reqOrder = "desc"
+	}
+
+	followList := struct {
+		Total   int             `json:"_total,omitempty"`
+		Follows []ChannelFollow `json:"follows"`
+	}{}
+
+	compiledList := []ChannelFollow{}
+
+	offset := 0
+	for offset < limit {
+
+		_, err := c.client.Get(c.au,
+			fmt.Sprintf("channels/%s/follows?limit=%d&offset=%ds&direction=%s",
+				id, reqPageLimit, offset, reqOrder), &followList)
+		if err != nil {
+			return compiledList, followList.Total, err
+		}
+
+		compiledList = append(compiledList, followList.Follows...)
+
+		if len(followList.Follows) < reqPageLimit {
+			return compiledList, followList.Total, nil
+		}
+
+		offset += reqPageLimit
+	}
+
+	return compiledList, followList.Total, nil
+}
+
+// GetSubscribers - Get all subs to channel id
 // limit - negative limit will get all subs
-func (c *ChannelsMethod) GetSubscribers(id string, limit int) (*Channel, error)  ([]User, error) {
-	if c.client.scopes[scopeUserRead] == false {
-		return nil, fmt.Errorf("Scope Required: %s", scopeChannelRead)
+func (c *ChannelsMethod) GetSubscribers(id string, limit int, newestFirst bool) ([]ChannelSub, int, error) {
+	err := c.au.checkScope(scopeChannelRead)
+	if err != nil {
+		return nil, 0, err
 	}
 
-    if(limit < 0) { 
-        reqPageLimit = 100
-    } else {
+	reqPageLimit := limit
+	if limit < 0 {
+		reqPageLimit = 100
+	} else if reqPageLimit > pageLimit {
+		// Only support up to pageLimit
+		reqPageLimit = pageLimit
+	}
 
-    // Only support up to pageLimit
-    reqPageLimit := limit
-    if reqPageLimit > pageLimit {
-        reqPageLimit = pageLimit
-    }
-    }
+	reqOrder := "asc"
+	if newestFirst {
+		reqOrder = "desc"
+	}
 
-	userList := struct {
-		Total    int    `json:"_total,omitempty"`
-		UserList []User `json:"subscriptions"`
+	subList := struct {
+		Total int          `json:"_total,omitempty"`
+		Subs  []ChannelSub `json:"subscriptions"`
 	}{}
 
-	_, err := c.client.Get("channels/"+id+"/editors", &editorList)
-	if err != nil {
-		return nil, err
+	compiledList := []ChannelSub{}
+
+	offset := 0
+	for offset < limit {
+
+		_, err := c.client.Get(c.au,
+			fmt.Sprintf("channels/%s/subscriptions?limit=%d&offset=%ds&direction=%s",
+				id, reqPageLimit, offset, reqOrder), &subList)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		compiledList = append(compiledList, subList.Subs...)
+
+		if len(subList.Subs) < reqPageLimit {
+			return compiledList, subList.Total, err
+		}
+
+		offset += reqPageLimit
 	}
 
-	return editorList.UserList, nil
+	return compiledList, subList.Total, nil
 }
 
 // func (c *ChannelsMethod) GetTeams(id string) (*Channel , error)            {}

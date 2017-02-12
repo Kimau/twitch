@@ -24,7 +24,8 @@ const (
 
 	listenRoot = "/twitch/"
 
-	pageLimit = 100
+	pageLimit    = 100
+	debugOptions = true
 
 	scopeChannelCheckSubscription = "channel_check_subscription" // "channel_check_subscription" - Read whether a user is subscribed to your channel.
 	scopeChannelCommercial        = "channel_commercial"         // "channel_commercial"         - Trigger commercials on channel.
@@ -79,72 +80,64 @@ var (
 
 // Client - Twitch OAuth Client
 type Client struct {
-	WebFace *web.WebFace
+	PublicWeb *web.WebFace
 
 	httpClient *http.Client
 	url        *url.URL
 
-	hasAuth    bool
-	oauthState string
-	authcode   string
-	scopes     map[string]bool
+	AdminAuth *UserAuth
+	AuthUsers map[string]*UserAuth // By Twitch ID (not name)
 
-	User *UsersMethod
+	User    *UsersMethod
+	Channel *ChannelsMethod
 }
 
 // CreateTwitchClient -
-func CreateTwitchClient(wf *web.WebFace, reqScopes []string) (*Client, error) {
+func CreateTwitchClient(publicWeb *web.WebFace, reqScopes []string) (*Client, error) {
 
-	if wf == nil {
+	if publicWeb == nil {
 		return nil, errors.New("WebFace must be valid")
-	}
-
-	newScope := make(map[string]bool)
-	for _, ov := range ValidScopes {
-		newScope[ov] = false
-		for _, v := range reqScopes {
-			if v == ov {
-				newScope[ov] = true
-			}
-		}
 	}
 
 	urlParsed, _ := url.Parse(rootURL)
 
 	kb := Client{
-		WebFace:    wf,
-		scopes:     newScope,
-		hasAuth:    false,
+		PublicWeb:  publicWeb,
+		AdminAuth:  makeUserAuth("", reqScopes),
 		url:        urlParsed,
 		httpClient: &http.Client{},
 	}
 
-	kb.User = &UsersMethod{client: &kb}
-	kb.oauthState = GenerateRandomString(32)
-	wf.Router.Handle(listenRoot, &kb)
+	kb.User = &UsersMethod{client: &kb, au: kb.AdminAuth}
+	kb.Channel = &ChannelsMethod{client: &kb, au: kb.AdminAuth}
+	publicWeb.Router.Handle(listenRoot, &kb)
 
 	return &kb, nil
 }
 
-func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+// HasAuth - Returns Auth Code not sure if this is okay but I need it for twitch interaction
+func (ah *Client) HasAuth() (bool, string) {
+	return ah.AdminAuth.hasAuth, ah.AdminAuth.authcode
+}
 
+// AdminHTTP for backoffice requests
+func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get Relative Path
 	relPath := req.URL.Path[strings.Index(req.URL.Path, listenRoot)+len(listenRoot):]
-	log.Println("Twitch: ", relPath)
+	log.Println("Twitch ADMIN: ", relPath)
 
 	// Force Auth
-	if ah.hasAuth == false {
+	if ah.AdminAuth.hasAuth == false {
 		if strings.HasPrefix(relPath, "after_signin") {
 			ah.handleOAuthResult(w, req)
 		} else {
-			ah.handleOAuthStart(w, req)
+			ah.AdminAuth.handleOAuthStart(w, req)
 		}
 
 		return
 	}
 
 	switch {
-
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()
 		if err != nil {
@@ -152,36 +145,66 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		fmt.Fprintf(w, "%#v", uf)
+
 	case strings.HasPrefix(relPath, "user"):
 		userName := regexp.MustCompile("username/([\\w]+)/*")
 		r := userName.FindStringSubmatch(relPath)
-		uf, err := ah.User.GetByName(r[1])
+		nameList := []string{r[1]}
+		uf, err := ah.User.GetByName(nameList)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		fmt.Fprintf(w, "%#v", uf)
+
+	case debugOptions && strings.HasPrefix(relPath, "debug/"):
+		splitD := strings.Split(req.RequestURI, "debug/")
+		log.Println("Debug: " + splitD[1])
+		body, err := ah.Get(ah.AdminAuth, splitD[1], nil)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprint(w, body)
+
 	default:
 		http.Error(w, fmt.Sprintf("Invalid Endpoint: %s", req.URL.Path), 404)
 	}
 }
 
-func (ah *Client) getScopeString() string {
-	s := ""
-	for k, v := range ah.scopes {
-		if v {
-			s += k + "+"
-		}
+func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	// Get Relative Path
+	relPath := req.URL.Path[strings.Index(req.URL.Path, listenRoot)+len(listenRoot):]
+
+	if strings.HasPrefix(relPath, "after_signin") {
+		ah.handleOAuthResult(w, req)
+		return
 	}
 
-	s = strings.TrimRight(s, "+")
+	// Get User
+	qList := req.URL.Query()
+	tid, ok := qList["tid"]
+	if !ok {
+		http.Error(w, "Provide Twitch login ID", http.StatusUnauthorized)
+		return
+	}
 
-	return s
+	u, ok := ah.AuthUsers[tid[0]]
+	if !ok {
+		u = makeUserAuth(tid[0], []string{})
+		ah.AuthUsers[u.TwitchID] = u
+	}
+
+	if u.hasAuth {
+		fmt.Fprint(w, "You are logged in")
+	} else {
+		u.handleOAuthStart(w, req)
+	}
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
-func (ah *Client) Get(path string, jsonStruct interface{}) (string, error) {
-	if !ah.hasAuth {
+func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string, error) {
+	if !au.hasAuth {
 		return "", fmt.Errorf("Client doesn't have auth. Cannot perform [%s]", path)
 	}
 
@@ -200,7 +223,7 @@ func (ah *Client) Get(path string, jsonStruct interface{}) (string, error) {
 
 	req.Header.Add("Accept", "application/vnd.twitchtv.v5+json")
 	req.Header.Add("Client-ID", clientID)
-	req.Header.Add("Authorization", "OAuth "+ah.authcode)
+	req.Header.Add("Authorization", "OAuth "+au.authcode)
 
 	resp, err := ah.httpClient.Do(req)
 
