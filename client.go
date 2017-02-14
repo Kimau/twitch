@@ -11,8 +11,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/kimau/kbot/web"
 )
 
 const (
@@ -22,7 +20,8 @@ const (
 	clientSecret = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
 	redirURL     = "http://localhost:30006/twitch/after_signin/" //"https://twitch.otg-gt.xyz/twitch/after_signin/"
 
-	listenRoot = "/twitch/"
+	// ListenRoot - Http Listen Root
+	ListenRoot = "/twitch/"
 
 	pageLimit    = 100
 	debugOptions = true
@@ -80,38 +79,31 @@ var (
 
 // Client - Twitch OAuth Client
 type Client struct {
-	PublicWeb *web.WebFace
-
 	httpClient *http.Client
 	url        *url.URL
 
-	AdminAuth *UserAuth
-	AuthUsers map[string]*UserAuth // By Twitch ID (not name)
+	AdminAuth    *UserAuth
+	AuthUsers    map[string]*UserAuth // By Twitch ID (not name)
+	AdminChannel chan int
 
 	User    *UsersMethod
 	Channel *ChannelsMethod
 }
 
 // CreateTwitchClient -
-func CreateTwitchClient(publicWeb *web.WebFace, reqScopes []string) (*Client, error) {
-
-	if publicWeb == nil {
-		return nil, errors.New("WebFace must be valid")
-	}
-
+func CreateTwitchClient(reqScopes []string) (*Client, error) {
 	urlParsed, _ := url.Parse(rootURL)
 
 	kb := Client{
-		PublicWeb:  publicWeb,
-		AdminAuth:  makeUserAuth("", reqScopes),
-		url:        urlParsed,
-		httpClient: &http.Client{},
-		AuthUsers:  make(map[string]*UserAuth),
+		AdminAuth:    makeUserAuth("", reqScopes),
+		url:          urlParsed,
+		httpClient:   &http.Client{},
+		AuthUsers:    make(map[string]*UserAuth),
+		AdminChannel: make(chan int),
 	}
 
 	kb.User = &UsersMethod{client: &kb, au: kb.AdminAuth}
 	kb.Channel = &ChannelsMethod{client: &kb, au: kb.AdminAuth}
-	publicWeb.Router.Handle(listenRoot, &kb)
 
 	return &kb, nil
 }
@@ -124,7 +116,7 @@ func (ah *Client) HasAuth() (bool, string) {
 // AdminHTTP for backoffice requests
 func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get Relative Path
-	relPath := req.URL.Path[strings.Index(req.URL.Path, listenRoot)+len(listenRoot):]
+	relPath := req.URL.Path[strings.Index(req.URL.Path, ListenRoot)+len(ListenRoot):]
 	log.Println("Twitch ADMIN: ", relPath)
 
 	// Force Auth
@@ -175,7 +167,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get Relative Path
-	relPath := req.URL.Path[strings.Index(req.URL.Path, listenRoot)+len(listenRoot):]
+	relPath := req.URL.Path[strings.Index(req.URL.Path, ListenRoot)+len(ListenRoot):]
 
 	if strings.HasPrefix(relPath, "after_signin") {
 		ah.handlePublicOAuthResult(w, req)

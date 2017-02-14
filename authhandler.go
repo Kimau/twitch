@@ -144,6 +144,8 @@ func (ah *Client) handleAdminOAuthResult(w http.ResponseWriter, req *http.Reques
 	authU.authcode = c[0]
 
 	ah.handleOAuthResult(w, ah.AdminAuth)
+
+	ah.AdminChannel <- 1
 }
 
 func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Request) {
