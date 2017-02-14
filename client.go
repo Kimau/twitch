@@ -106,6 +106,7 @@ func CreateTwitchClient(publicWeb *web.WebFace, reqScopes []string) (*Client, er
 		AdminAuth:  makeUserAuth("", reqScopes),
 		url:        urlParsed,
 		httpClient: &http.Client{},
+		AuthUsers:  make(map[string]*UserAuth),
 	}
 
 	kb.User = &UsersMethod{client: &kb, au: kb.AdminAuth}
@@ -129,7 +130,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	// Force Auth
 	if ah.AdminAuth.hasAuth == false {
 		if strings.HasPrefix(relPath, "after_signin") {
-			ah.handleOAuthResult(w, req)
+			ah.handleAdminOAuthResult(w, req)
 		} else {
 			ah.AdminAuth.handleOAuthStart(w, req)
 		}
@@ -177,7 +178,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	relPath := req.URL.Path[strings.Index(req.URL.Path, listenRoot)+len(listenRoot):]
 
 	if strings.HasPrefix(relPath, "after_signin") {
-		ah.handleOAuthResult(w, req)
+		ah.handlePublicOAuthResult(w, req)
 		return
 	}
 

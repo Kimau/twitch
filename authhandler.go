@@ -96,10 +96,6 @@ func (ua *UserAuth) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
 }
 
 func (ah *Client) findUserByState(state string) *UserAuth {
-	if ah.AdminAuth.oauthState == state {
-		return ah.AdminAuth
-	}
-
 	for _, v := range ah.AuthUsers {
 		if v.oauthState == state {
 			return v
@@ -109,7 +105,48 @@ func (ah *Client) findUserByState(state string) *UserAuth {
 	return nil
 }
 
-func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
+func (ah *Client) handleAdminOAuthResult(w http.ResponseWriter, req *http.Request) {
+	qList := req.URL.Query()
+
+	c, ok := qList["code"]
+	if !ok {
+		s := fmt.Sprintf("Hello your auth was cancelled")
+
+		for k, v := range qList {
+			s += fmt.Sprintf("%s:%s\n", k, v)
+		}
+		http.Error(w, s, 400)
+		return
+	}
+
+	stateList, ok := qList["state"]
+	if !ok || ah.AdminAuth.oauthState != stateList[0] {
+		http.Error(w, "Invalid State", 400)
+		return
+	}
+
+	authU := ah.findUserByState(stateList[0])
+	if authU == nil {
+		http.Error(w, "Invalid Auth State", 400)
+		return
+	}
+
+	scopeList, ok := qList["scope"]
+	if !ok {
+		http.Error(w, "Invalid Scope", 400)
+		return
+	}
+	scopeList = strings.Split(scopeList[0], " ")
+
+	// Save State
+	authU.hasAuth = false
+	authU.updateScope(scopeList)
+	authU.authcode = c[0]
+
+	ah.handleOAuthResult(w, ah.AdminAuth)
+}
+
+func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Request) {
 	qList := req.URL.Query()
 
 	c, ok := qList["code"]
@@ -146,6 +183,11 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, req *http.Request) {
 	authU.hasAuth = false
 	authU.updateScope(scopeList)
 	authU.authcode = c[0]
+
+	ah.handleOAuthResult(w, authU)
+}
+
+func (ah *Client) handleOAuthResult(w http.ResponseWriter, authU *UserAuth) {
 
 	// Setup Payload
 	data := url.Values{}
