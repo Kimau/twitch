@@ -15,18 +15,33 @@ var (
 	authSignRegEx = regexp.MustCompile("/twitch/signin/([\\w]+)/*")
 )
 
+type authToken struct {
+	AuthToken struct {
+		CreatedAtString string   `json:"created_at"` // 2013-06-03T19:12:02Z
+		UpdatedAtStr    string   `json:"updated_at"` // 2016-12-14T01:01:44Z
+		ScopeList       []string `json:"scopes"`
+	} `json:"authorization"`
+	ClientID string `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"
+	UserID   string `json:"user_id"`   // "44322889"
+	Username string `json:"user_name"` // "dallas"
+	IsValid  bool   `json:"valid"`     // true
+}
+
 // UserAuth - Used to manage OAuth for Logins
 type UserAuth struct {
 	TwitchID string
 	User     *User
 
-	hasAuth    bool
-	oauthState string
 	authcode   string
-	scopes     map[string]bool
+	oauthState string
+	token      *authToken
+
+	scopes map[string]bool
+
+	client *Client
 }
 
-func makeUserAuth(id string, reqScopes []string) *UserAuth {
+func makeUserAuth(id string, twitchClient *Client, reqScopes []string) *UserAuth {
 	newScope := make(map[string]bool)
 	for _, ov := range ValidScopes {
 		newScope[ov] = false
@@ -40,13 +55,53 @@ func makeUserAuth(id string, reqScopes []string) *UserAuth {
 	au := UserAuth{
 		TwitchID: id,
 		User:     nil,
+		token:    nil,
 
-		hasAuth:    false,
 		oauthState: GenerateRandomString(16),
 		scopes:     newScope,
+		client:     twitchClient,
 	}
 
 	return &au
+}
+
+func (ua *UserAuth) getRootToken() error {
+
+	rootResponse := authToken{}
+
+	_, err := ua.client.Get(ua, "", &rootResponse)
+	if err != nil {
+		return err
+	}
+
+	if rootResponse.IsValid == false {
+		return fmt.Errorf("Root Response is Invalid: %v", rootResponse)
+	}
+
+	if clientID != rootResponse.ClientID {
+		return fmt.Errorf("Client ID doesn't match [%s:%s]", clientID, rootResponse.ClientID)
+	}
+
+	ua.token = &rootResponse
+	return nil
+}
+
+// GetAuth - checks if auth and if auth returns auth code
+func (ua *UserAuth) GetAuth() (bool, string) {
+	if ua.token == nil {
+		return false, ""
+	}
+	return true, ua.authcode
+}
+
+// GetIrcAuth - returns the stuff needed for IRC
+func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr string) {
+	isAuth, c := ua.GetAuth()
+	if !isAuth {
+		return false, "", "", ircServerAddr
+	}
+
+	return true, ua.token.Username, "oauth:" + c, ircServerAddr
 }
 
 func (ua *UserAuth) getScopeString() string {
@@ -86,7 +141,7 @@ func (ua *UserAuth) checkScope(reqScopes ...string) error {
 }
 
 func (ua *UserAuth) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
-	if ua.hasAuth {
+	if ua.token != nil {
 		http.Error(w, "Already logged in admin", http.StatusConflict)
 		return
 	}
@@ -125,12 +180,6 @@ func (ah *Client) handleAdminOAuthResult(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	authU := ah.findUserByState(stateList[0])
-	if authU == nil {
-		http.Error(w, "Invalid Auth State", 400)
-		return
-	}
-
 	scopeList, ok := qList["scope"]
 	if !ok {
 		http.Error(w, "Invalid Scope", 400)
@@ -139,13 +188,21 @@ func (ah *Client) handleAdminOAuthResult(w http.ResponseWriter, req *http.Reques
 	scopeList = strings.Split(scopeList[0], " ")
 
 	// Save State
-	authU.hasAuth = false
-	authU.updateScope(scopeList)
-	authU.authcode = c[0]
+	ah.AdminAuth.updateScope(scopeList)
+	ah.AdminAuth.authcode = c[0]
 
 	ah.handleOAuthResult(w, ah.AdminAuth)
 
-	ah.AdminChannel <- 1
+	if ah.AdminAuth.token != nil {
+		var err error
+		ah.AdminAuth.User, err = ah.User.Get(ah.AdminAuth.token.ClientID)
+
+		if err != nil {
+			http.Error(w, "Unable to get Auth Token: "+err.Error(), 400)
+		}
+
+		ah.AdminChannel <- 1
+	}
 }
 
 func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Request) {
@@ -182,7 +239,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	scopeList = strings.Split(scopeList[0], " ")
 
 	// Save State
-	authU.hasAuth = false
+	authU.token = nil
 	authU.updateScope(scopeList)
 	authU.authcode = c[0]
 
@@ -238,7 +295,12 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, authU *UserAuth) {
 	}
 
 	authU.authcode = tokenStruct.Token
-	authU.hasAuth = true
+
+	err = authU.getRootToken()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	// Output Result
 	fmt.Fprint(w, "You are logged in")

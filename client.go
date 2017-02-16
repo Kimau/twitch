@@ -14,11 +14,12 @@ import (
 )
 
 const (
-	rootURL      = "https://api.twitch.tv/kraken/"
-	baseURL      = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
-	clientID     = "qhaf2djfhvkohczx08oyqra51hjasn"
-	clientSecret = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
-	redirURL     = "http://localhost:30006/twitch/after_signin/" //"https://twitch.otg-gt.xyz/twitch/after_signin/"
+	rootURL       = "https://api.twitch.tv/kraken/"
+	ircServerAddr = "irc.chat.twitch.tv"
+	baseURL       = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
+	clientID      = "qhaf2djfhvkohczx08oyqra51hjasn"
+	clientSecret  = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
+	redirURL      = "http://localhost:30006/twitch/after_signin/" //"https://twitch.otg-gt.xyz/twitch/after_signin/"
 
 	// ListenRoot - Http Listen Root
 	ListenRoot = "/twitch/"
@@ -95,12 +96,13 @@ func CreateTwitchClient(reqScopes []string) (*Client, error) {
 	urlParsed, _ := url.Parse(rootURL)
 
 	kb := Client{
-		AdminAuth:    makeUserAuth("", reqScopes),
 		url:          urlParsed,
 		httpClient:   &http.Client{},
 		AuthUsers:    make(map[string]*UserAuth),
 		AdminChannel: make(chan int),
 	}
+
+	kb.AdminAuth = makeUserAuth("", &kb, reqScopes)
 
 	kb.User = &UsersMethod{client: &kb, au: kb.AdminAuth}
 	kb.Channel = &ChannelsMethod{client: &kb, au: kb.AdminAuth}
@@ -108,9 +110,9 @@ func CreateTwitchClient(reqScopes []string) (*Client, error) {
 	return &kb, nil
 }
 
-// HasAuth - Returns Auth Code not sure if this is okay but I need it for twitch interaction
-func (ah *Client) HasAuth() (bool, string) {
-	return ah.AdminAuth.hasAuth, ah.AdminAuth.authcode
+// GetAuth - Returns Auth Code not sure if this is okay but I need it for twitch interaction
+func (ah *Client) GetAuth() (bool, string) {
+	return ah.AdminAuth.GetAuth()
 }
 
 // AdminHTTP for backoffice requests
@@ -120,7 +122,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Println("Twitch ADMIN: ", relPath)
 
 	// Force Auth
-	if ah.AdminAuth.hasAuth == false {
+	if ah.AdminAuth.token == nil {
 		if strings.HasPrefix(relPath, "after_signin") {
 			ah.handleAdminOAuthResult(w, req)
 		} else {
@@ -184,12 +186,12 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	u, ok := ah.AuthUsers[tid[0]]
 	if !ok {
-		u = makeUserAuth(tid[0], []string{})
+		u = makeUserAuth(tid[0], ah, []string{})
 		ah.AuthUsers[u.TwitchID] = u
 	}
 
-	if u.hasAuth {
-		fmt.Fprint(w, "You are logged in")
+	if u.token != nil {
+		fmt.Fprintf(w, "You are logged in %s", u.token.Username)
 	} else {
 		u.handleOAuthStart(w, req)
 	}
@@ -197,7 +199,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
 func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string, error) {
-	if !au.hasAuth {
+	if au.token == nil {
 		return "", fmt.Errorf("Client doesn't have auth. Cannot perform [%s]", path)
 	}
 
