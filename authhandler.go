@@ -67,22 +67,28 @@ func makeUserAuth(id string, twitchClient *Client, reqScopes []string) *UserAuth
 
 func (ua *UserAuth) getRootToken() error {
 
-	rootResponse := authToken{}
+	ua.token = &authToken{}
 
-	_, err := ua.client.Get(ua, "", &rootResponse)
+	s, err := ua.client.Get(ua, "", ua.token)
 	if err != nil {
+		ua.token = nil
 		return err
 	}
 
-	if rootResponse.IsValid == false {
-		return fmt.Errorf("Root Response is Invalid: %v", rootResponse)
+	if ua.token.IsValid == false {
+		log.Println(s)
+		log.Println(ua.token)
+
+		err := fmt.Errorf("Root Response is Invalid: %v \n %s", ua.token, s)
+		ua.token = nil
+		return err
 	}
 
-	if clientID != rootResponse.ClientID {
-		return fmt.Errorf("Client ID doesn't match [%s:%s]", clientID, rootResponse.ClientID)
+	if clientID != ua.token.ClientID {
+		ua.token = nil
+		return fmt.Errorf("Client ID doesn't match [%s:%s]", clientID, ua.token.ClientID)
 	}
 
-	ua.token = &rootResponse
 	return nil
 }
 
@@ -160,51 +166,6 @@ func (ah *Client) findUserByState(state string) *UserAuth {
 	return nil
 }
 
-func (ah *Client) handleAdminOAuthResult(w http.ResponseWriter, req *http.Request) {
-	qList := req.URL.Query()
-
-	c, ok := qList["code"]
-	if !ok {
-		s := fmt.Sprintf("Hello your auth was cancelled")
-
-		for k, v := range qList {
-			s += fmt.Sprintf("%s:%s\n", k, v)
-		}
-		http.Error(w, s, 400)
-		return
-	}
-
-	stateList, ok := qList["state"]
-	if !ok || ah.AdminAuth.oauthState != stateList[0] {
-		http.Error(w, "Invalid State", 400)
-		return
-	}
-
-	scopeList, ok := qList["scope"]
-	if !ok {
-		http.Error(w, "Invalid Scope", 400)
-		return
-	}
-	scopeList = strings.Split(scopeList[0], " ")
-
-	// Save State
-	ah.AdminAuth.updateScope(scopeList)
-	ah.AdminAuth.authcode = c[0]
-
-	ah.handleOAuthResult(w, ah.AdminAuth)
-
-	if ah.AdminAuth.token != nil {
-		var err error
-		ah.AdminAuth.User, err = ah.User.Get(ah.AdminAuth.token.ClientID)
-
-		if err != nil {
-			http.Error(w, "Unable to get Auth Token: "+err.Error(), 400)
-		}
-
-		ah.AdminChannel <- 1
-	}
-}
-
 func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Request) {
 	qList := req.URL.Query()
 
@@ -225,7 +186,17 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	authU := ah.findUserByState(stateList[0])
+	var authU *UserAuth
+	isAdmin := false
+	stateVal := stateList[0]
+	// Check if Admin Login
+	if (ah.AdminAuth.token == nil) && stateVal == ah.AdminAuth.oauthState {
+		authU = ah.AdminAuth
+		isAdmin = true
+	} else { // Normal user do logic
+		authU = ah.findUserByState(stateVal)
+	}
+
 	if authU == nil {
 		http.Error(w, "Invalid Auth State", 400)
 		return
@@ -243,10 +214,29 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	authU.updateScope(scopeList)
 	authU.authcode = c[0]
 
-	ah.handleOAuthResult(w, authU)
+	err := ah.handleOAuthResult(authU)
+	if err != nil {
+		log.Println(err, authU)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if isAdmin {
+		if ah.AdminAuth.token != nil {
+			var err error
+			ah.AdminAuth.User, err = ah.User.Get(ah.AdminAuth.token.ClientID)
+
+			if err != nil {
+				http.Error(w, "Unable to get Auth Token: "+err.Error(), 400)
+			}
+
+			ah.AdminChannel <- 1
+		} else {
+			http.Error(w, "Admin Auth has no token", 400)
+		}
+	}
 }
 
-func (ah *Client) handleOAuthResult(w http.ResponseWriter, authU *UserAuth) {
+func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 
 	// Setup Payload
 	data := url.Values{}
@@ -262,8 +252,7 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, authU *UserAuth) {
 	req, err := http.NewRequest("POST", "https://api.twitch.tv/kraken/oauth2/token", payload)
 	if err != nil {
 		log.Println("Failed to Build Request")
-		http.Error(w, err.Error(), 500)
-		return
+		return err
 	}
 
 	req.Header.Add("accept", "application/vnd.twitchtv.v5+json")
@@ -274,12 +263,11 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, authU *UserAuth) {
 
 	resp, err := ah.httpClient.Do(req)
 	if err != nil || resp.StatusCode >= 400 {
+		log.Printf("---\n %#v \n---\n %#v \n---\n %#v \n---\n", req, resp, payload)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("---\n %#v \n---\n %#v \n---\n %#v \n---\n %s", req, resp, payload, err.Error()), 500)
-		} else {
-			http.Error(w, fmt.Sprintf("---\n %#v \n---\n %#v \n---\n %#v \n---\n", req, resp, payload), resp.StatusCode)
+			return err
 		}
-		return
+		return fmt.Errorf("Failed to auth follow through %d - %s", resp.StatusCode, resp.Body)
 	}
 
 	// Decode JSON
@@ -290,18 +278,16 @@ func (ah *Client) handleOAuthResult(w http.ResponseWriter, authU *UserAuth) {
 	}{}
 	err = json.NewDecoder(resp.Body).Decode(&tokenStruct)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+		return err
 	}
 
 	authU.authcode = tokenStruct.Token
 
 	err = authU.getRootToken()
 	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+		return err
 	}
 
 	// Output Result
-	fmt.Fprint(w, "You are logged in")
+	return nil
 }

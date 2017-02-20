@@ -123,12 +123,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Force Auth
 	if ah.AdminAuth.token == nil {
-		if strings.HasPrefix(relPath, "after_signin") {
-			ah.handleAdminOAuthResult(w, req)
-		} else {
-			ah.AdminAuth.handleOAuthStart(w, req)
-		}
-
+		ah.AdminAuth.handleOAuthStart(w, req)
 		return
 	}
 
