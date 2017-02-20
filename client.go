@@ -99,7 +99,7 @@ func CreateTwitchClient(reqScopes []string) (*Client, error) {
 		url:          urlParsed,
 		httpClient:   &http.Client{},
 		AuthUsers:    make(map[string]*UserAuth),
-		AdminChannel: make(chan int),
+		AdminChannel: make(chan int, 3),
 	}
 
 	kb.AdminAuth = makeUserAuth("", &kb, reqScopes)
@@ -198,15 +198,21 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 		return "", fmt.Errorf("Client doesn't have auth. Cannot perform [%s]", path)
 	}
 
-	rel, err := url.Parse(path)
+	urlString := "https://api.twitch.tv/kraken"
+	if path != "" {
 
-	if err != nil {
-		return "", err
+		rel, err := url.Parse(path)
+
+		if err != nil {
+			return "", err
+		}
+
+		subURL := ah.url.ResolveReference(rel)
+		urlString = subURL.String()
 	}
 
-	subURL := ah.url.ResolveReference(rel)
-
-	req, err := http.NewRequest("GET", subURL.String(), nil)
+	log.Printf("Twitch Get: %s", urlString)
+	req, err := http.NewRequest("GET", urlString, nil)
 	if err != nil {
 		return "", err
 	}

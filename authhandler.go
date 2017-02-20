@@ -69,17 +69,18 @@ func (ua *UserAuth) getRootToken() error {
 
 	ua.token = &authToken{}
 
-	s, err := ua.client.Get(ua, "", ua.token)
+	tokenContain := &struct {
+		Token *authToken `json:"token"`
+	}{ua.token}
+
+	_, err := ua.client.Get(ua, "", tokenContain)
 	if err != nil {
 		ua.token = nil
 		return err
 	}
 
 	if ua.token.IsValid == false {
-		log.Println(s)
-		log.Println(ua.token)
-
-		err := fmt.Errorf("Root Response is Invalid: %v \n %s", ua.token, s)
+		err = fmt.Errorf("Root Response is Invalid: %v ", ua.token)
 		ua.token = nil
 		return err
 	}
@@ -88,6 +89,8 @@ func (ua *UserAuth) getRootToken() error {
 		ua.token = nil
 		return fmt.Errorf("Client ID doesn't match [%s:%s]", clientID, ua.token.ClientID)
 	}
+
+	ua.TwitchID = ua.token.UserID
 
 	return nil
 }
@@ -218,22 +221,25 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		log.Println(err, authU)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	if isAdmin {
 		if ah.AdminAuth.token != nil {
-			var err error
-			ah.AdminAuth.User, err = ah.User.Get(ah.AdminAuth.token.ClientID)
-
-			if err != nil {
-				http.Error(w, "Unable to get Auth Token: "+err.Error(), 400)
-			}
-
 			ah.AdminChannel <- 1
 		} else {
 			http.Error(w, "Admin Auth has no token", 400)
 		}
 	}
+
+	fmt.Fprintf(w, "Logged in %s #%s", authU.token.Username, authU.TwitchID)
+
+	authU.User, err = ah.User.Get(authU.TwitchID)
+
+	if err != nil {
+		log.Println("Failed to Get User Data", err)
+	}
+
 }
 
 func (ah *Client) handleOAuthResult(authU *UserAuth) error {
@@ -280,7 +286,6 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	if err != nil {
 		return err
 	}
-
 	authU.authcode = tokenStruct.Token
 
 	err = authU.getRootToken()
