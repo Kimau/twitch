@@ -65,6 +65,18 @@ func makeUserAuth(id string, twitchClient *Client, reqScopes []string) *UserAuth
 	return &au
 }
 
+func (ua *UserAuth) GetNick() string {
+	if ua.User != nil {
+		return ua.User.Name
+	}
+
+	if ua.token != nil {
+		return ua.token.Username
+	}
+
+	return ua.TwitchID
+}
+
 func (ua *UserAuth) getRootToken() error {
 
 	ua.token = &authToken{}
