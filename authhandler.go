@@ -9,75 +9,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
 	authSignRegEx = regexp.MustCompile("/twitch/signin/([\\w]+)/*")
 )
 
-type authToken struct {
-	AuthToken struct {
-		CreatedAtString string   `json:"created_at"` // 2013-06-03T19:12:02Z
-		UpdatedAtStr    string   `json:"updated_at"` // 2016-12-14T01:01:44Z
-		ScopeList       []string `json:"scopes"`
-	} `json:"authorization"`
-	ClientID string `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"
-	UserID   string `json:"user_id"`   // "44322889"
-	Username string `json:"user_name"` // "dallas"
-	IsValid  bool   `json:"valid"`     // true
-}
-
-// UserAuth - Used to manage OAuth for Logins
-type UserAuth struct {
-	TwitchID string
-	User     *User
-
-	authcode   string
-	oauthState string
-	token      *authToken
-
-	scopes map[string]bool
-
-	client *Client
-}
-
-func makeUserAuth(id string, twitchClient *Client, reqScopes []string) *UserAuth {
-	newScope := make(map[string]bool)
-	for _, ov := range ValidScopes {
-		newScope[ov] = false
-		for _, v := range reqScopes {
-			if v == ov {
-				newScope[ov] = true
-			}
-		}
-	}
-
-	au := UserAuth{
-		TwitchID: id,
-		User:     nil,
-		token:    nil,
-
-		oauthState: GenerateRandomString(16),
-		scopes:     newScope,
-		client:     twitchClient,
-	}
-
-	return &au
-}
-
-func (ua *UserAuth) GetNick() string {
-	if ua.User != nil {
-		return ua.User.Name
-	}
-
-	if ua.token != nil {
-		return ua.token.Username
-	}
-
-	return ua.TwitchID
-}
-
-func (ua *UserAuth) getRootToken() error {
+func (ah *Client) getRootToken(ua *UserAuth) error {
 
 	ua.token = &authToken{}
 
@@ -85,7 +24,7 @@ func (ua *UserAuth) getRootToken() error {
 		Token *authToken `json:"token"`
 	}{ua.token}
 
-	_, err := ua.client.Get(ua, "", tokenContain)
+	_, err := ah.Get(ua, "", tokenContain)
 	if err != nil {
 		ua.token = nil
 		return err
@@ -102,83 +41,30 @@ func (ua *UserAuth) getRootToken() error {
 		return fmt.Errorf("Client ID doesn't match [%s:%s]", clientID, ua.token.ClientID)
 	}
 
-	ua.TwitchID = ua.token.UserID
-
 	return nil
 }
 
-// GetAuth - checks if auth and if auth returns auth code
-func (ua *UserAuth) GetAuth() (bool, string) {
-	if ua.token == nil {
-		return false, ""
-	}
-	return true, ua.authcode
-}
-
-// GetIrcAuth - returns the stuff needed for IRC
-func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr string) {
-	isAuth, c := ua.GetAuth()
-	if !isAuth {
-		return false, "", "", ircServerAddr
-	}
-
-	return true, ua.token.Username, "oauth:" + c, ircServerAddr
-}
-
-func (ua *UserAuth) getScopeString() string {
-	if ua.scopes == nil {
-		return ""
-	}
-
-	s := ""
-	for k, v := range ua.scopes {
-		if v {
-			s += k + "+"
-		}
-	}
-
-	s = strings.TrimRight(s, "+")
-
-	return s
-}
-
-func (ua *UserAuth) updateScope(scopeList []string) {
-	for k := range ua.scopes {
-		ua.scopes[k] = false
-	}
-	for _, k := range scopeList {
-		ua.scopes[k] = true
-	}
-}
-
-func (ua *UserAuth) checkScope(reqScopes ...string) error {
-	for _, v := range reqScopes {
-		if ua.scopes[v] == false {
-			return fmt.Errorf("Scope Required: %s", v)
-		}
-	}
-
-	return nil
-}
-
-func (ua *UserAuth) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
-	if ua.token != nil {
-		http.Error(w, "Already logged in admin", http.StatusConflict)
-		return
-	}
-
-	fullRedirStr := fmt.Sprintf(baseURL, rootURL, clientID, redirURL, ua.getScopeString(), ua.oauthState)
+func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request) {
+	fullRedirStr := fmt.Sprintf(baseURL,
+		rootURL,
+		clientID,
+		redirURL,
+		mergeScopeString(DefaultViewerScope),
+		ah.AdminAuth.oauthState)
 	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
 }
 
-func (ah *Client) findUserByState(state string) *UserAuth {
-	for _, v := range ah.AuthUsers {
-		if v.oauthState == state {
-			return v
-		}
-	}
+func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
+	myState := GenerateRandomString(16)
+	ah.PendingLogins[myState] = time.Now()
 
-	return nil
+	fullRedirStr := fmt.Sprintf(baseURL,
+		rootURL,
+		clientID,
+		redirURL,
+		mergeScopeString(DefaultViewerScope),
+		myState)
+	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
 }
 
 func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Request) {
@@ -209,7 +95,12 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 		authU = ah.AdminAuth
 		isAdmin = true
 	} else { // Normal user do logic
-		authU = ah.findUserByState(stateVal)
+		authU = &UserAuth{
+			oauthState: stateVal,
+			scopes:     make(map[string]bool),
+		}
+
+		delete(ah.PendingLogins, stateVal)
 	}
 
 	if authU == nil {
@@ -236,22 +127,35 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	tID := authU.token.UserID
 	if isAdmin {
 		if ah.AdminAuth.token != nil {
 			ah.AdminChannel <- 1
+			fmt.Fprintf(w, "Admin logged in %s #%s", authU.token.Username, tID)
 		} else {
 			http.Error(w, "Admin Auth has no token", 400)
 		}
+
+		go func() {
+			ah.AdminUser, err = ah.User.Get(tID)
+			if err != nil {
+				log.Println("Failed to Get Admin User Data", err)
+			}
+		}()
+	} else {
+
+		v := &Viewer{
+			User:   nil,
+			Auth:   authU,
+			client: ah,
+		}
+
+		ah.Viewers[tID] = v
+		http.SetCookie(w, v.Auth.createSessionCookie())
+		fmt.Fprintf(w, "Logged in %s #%s", v.Nick(), tID)
+
+		go v.UpdateUser()
 	}
-
-	fmt.Fprintf(w, "Logged in %s #%s", authU.token.Username, authU.TwitchID)
-
-	authU.User, err = ah.User.Get(authU.TwitchID)
-
-	if err != nil {
-		log.Println("Failed to Get User Data", err)
-	}
-
 }
 
 func (ah *Client) handleOAuthResult(authU *UserAuth) error {
@@ -300,7 +204,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	}
 	authU.authcode = tokenStruct.Token
 
-	err = authU.getRootToken()
+	err = ah.getRootToken(authU)
 	if err != nil {
 		return err
 	}

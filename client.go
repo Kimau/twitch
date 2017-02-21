@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 	baseURL       = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
 	clientID      = "qhaf2djfhvkohczx08oyqra51hjasn"
 	clientSecret  = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
+	cookieDoman   = "localhost:30006"
 	redirURL      = "http://localhost:30006/twitch/after_signin/" //"https://twitch.otg-gt.xyz/twitch/after_signin/"
 
 	// ListenRoot - Http Listen Root
@@ -76,6 +78,9 @@ var (
 		scopeUserRead,
 		scopeUserSubscriptions,
 	}
+
+	// DefaultViewerScope - Good set of scopes for Viewer Login
+	DefaultViewerScope = []string{}
 )
 
 // Client - Twitch OAuth Client
@@ -83,9 +88,12 @@ type Client struct {
 	httpClient *http.Client
 	url        *url.URL
 
+	AdminUser    *User
 	AdminAuth    *UserAuth
-	AuthUsers    map[string]*UserAuth // By Twitch ID (not name)
 	AdminChannel chan int
+
+	Viewers       map[string]*Viewer   // By Twitch ID (not name)
+	PendingLogins map[string]time.Time // Twitch ID by State for Login
 
 	User    *UsersMethod
 	Channel *ChannelsMethod
@@ -98,11 +106,18 @@ func CreateTwitchClient(reqScopes []string) (*Client, error) {
 	kb := Client{
 		url:          urlParsed,
 		httpClient:   &http.Client{},
-		AuthUsers:    make(map[string]*UserAuth),
 		AdminChannel: make(chan int, 3),
+
+		Viewers:       make(map[string]*Viewer),
+		PendingLogins: make(map[string]time.Time),
 	}
 
-	kb.AdminAuth = makeUserAuth("", &kb, reqScopes)
+	kb.AdminAuth = &UserAuth{
+		token:      nil,
+		oauthState: GenerateRandomString(16),
+		scopes:     make(map[string]bool),
+	}
+	kb.AdminAuth.updateScope(reqScopes)
 
 	kb.User = &UsersMethod{client: &kb, au: kb.AdminAuth}
 	kb.Channel = &ChannelsMethod{client: &kb, au: kb.AdminAuth}
@@ -123,7 +138,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Force Auth
 	if ah.AdminAuth.token == nil {
-		ah.AdminAuth.handleOAuthStart(w, req)
+		ah.handleOAuthAdminStart(w, req)
 		return
 	}
 
@@ -171,32 +186,38 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get User
-	qList := req.URL.Query()
-	tid, ok := qList["tid"]
-	if !ok {
-		http.Error(w, "Provide Twitch login ID", http.StatusUnauthorized)
+	// User isn't Auth start login
+	c, err := req.Cookie(UserAuthSessionCookieName)
+	if err != nil {
+		log.Println("Session Error", err)
+		ah.handleOAuthStart(w, req)
 		return
 	}
 
-	u, ok := ah.AuthUsers[tid[0]]
+	cList := strings.Split(c.Value, ":")
+	tid := cList[0]
+
+	// Try Find User
+	u, ok := ah.Viewers[tid]
 	if !ok {
-		u = makeUserAuth(tid[0], ah, []string{})
-		ah.AuthUsers[u.TwitchID] = u
+		http.Error(w, fmt.Sprintf("Couldn't find user %s", tid), http.StatusUnauthorized)
+		return
 	}
 
-	if u.token != nil {
-		fmt.Fprintf(w, "You are logged in %s", u.token.Username)
-	} else {
-		u.handleOAuthStart(w, req)
+	// User isn't Auth start login
+	if u.Auth == nil || (u.Auth.checkCookie(c) == false) {
+		log.Println("Cookie Failed", u.Auth, c)
+		ah.handleOAuthStart(w, req)
+		return
 	}
+
+	http.SetCookie(w, u.Auth.sessionCookie)
+	fmt.Fprintf(w, "You are logged in %s", u.Nick())
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
+// If you call it with a nil user or user without a token it will do request without auth
 func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string, error) {
-	if au.token == nil {
-		return "", fmt.Errorf("Client doesn't have auth. Cannot perform [%s]", path)
-	}
 
 	urlString := "https://api.twitch.tv/kraken"
 	if path != "" {
@@ -219,7 +240,9 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 
 	req.Header.Add("Accept", "application/vnd.twitchtv.v5+json")
 	req.Header.Add("Client-ID", clientID)
-	req.Header.Add("Authorization", "OAuth "+au.authcode)
+	if au != nil && au.token != nil {
+		req.Header.Add("Authorization", "OAuth "+au.authcode)
+	}
 
 	resp, err := ah.httpClient.Do(req)
 

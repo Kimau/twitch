@@ -39,15 +39,19 @@ type UserNotification struct {
 	Push  bool `json:"push,omitempty"`
 }
 
-// UserFull can only be fetched for OAuth User
-type UserFull struct {
-	*User
-
+// UserPersonal - Personal data can only be got for AuthUser
+type UserPersonal struct {
 	Email            string           `json:"email,omitempty"`
 	EmailIsVerified  bool             `json:"email_verified,omitempty"`
 	Partnered        bool             `json:"partnered,omitempty"`
 	TwitterConnected bool             `json:"twitter_connected,omitempty"`
 	Notification     UserNotification `json:"notifications,omitempty"`
+}
+
+// UserFull can only be fetched for OAuth User
+type UserFull struct {
+	*User
+	*UserPersonal
 }
 
 type Emote struct {
