@@ -16,7 +16,7 @@ import (
 
 const (
 	rootURL       = "https://api.twitch.tv/kraken/"
-	ircServerAddr = "irc.chat.twitch.tv"
+	ircServerAddr = "irc.chat.twitch.tv:6667"
 	baseURL       = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
 	clientID      = "qhaf2djfhvkohczx08oyqra51hjasn"
 	clientSecret  = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
@@ -77,6 +77,7 @@ var (
 		scopeUserFollowsEdit,
 		scopeUserRead,
 		scopeUserSubscriptions,
+		scopeChatLogin,
 	}
 
 	// DefaultViewerScope - Good set of scopes for Viewer Login
