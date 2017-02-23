@@ -49,7 +49,7 @@ func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request
 		rootURL,
 		clientID,
 		redirURL,
-		mergeScopeString(DefaultViewerScope),
+		mergeScopeString(DefaultStreamerScope),
 		ah.AdminAuth.oauthState)
 	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
 }
@@ -114,11 +114,12 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 		return
 	}
 	scopeList = strings.Split(scopeList[0], " ")
+	log.Println(strings.Split(scopeList[0], "\n\t"))
 
 	// Save State
 	authU.token = nil
 	authU.updateScope(scopeList)
-	authU.authcode = c[0]
+	authU.ircCode = c[0]
 
 	err := ah.handleOAuthResult(authU)
 	if err != nil {
@@ -131,7 +132,9 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	if isAdmin {
 		if ah.AdminAuth.token != nil {
 			ah.AdminChannel <- 1
-			fmt.Fprintf(w, "Admin logged in %s #%s", authU.token.Username, tID)
+			fmt.Fprintf(w, "Admin logged in %s #%s\n---Scope---\n\t%s\n---------\n",
+				authU.token.Username, tID,
+				strings.Join(strings.Split(scopeList[0], " "), "\n\t"))
 		} else {
 			http.Error(w, "Admin Auth has no token", 400)
 		}
@@ -166,7 +169,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	data.Set("client_secret", clientSecret)
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", redirURL)
-	data.Set("code", authU.authcode)
+	data.Set("code", authU.ircCode)
 	data.Set("state", authU.oauthState)
 	payload := strings.NewReader(data.Encode())
 

@@ -28,7 +28,9 @@ type authToken struct {
 type UserAuth struct {
 	authcode   string
 	oauthState string
-	token      *authToken
+	ircCode    string
+
+	token *authToken
 
 	sessionCookie *http.Cookie
 	scopes        map[string]bool
@@ -45,12 +47,12 @@ func (ua *UserAuth) GetAuth() (bool, string) {
 
 // GetIrcAuth - returns the stuff needed for IRC
 func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr string) {
-	isAuth, c := ua.GetAuth()
+	isAuth, _ := ua.GetAuth()
 	if !isAuth {
 		return false, "", "", ircServerAddr
 	}
 
-	return true, ua.token.Username, "oauth:" + c, ircServerAddr
+	return true, ua.token.Username, "oauth:" + ua.authcode, ircServerAddr
 }
 
 func mergeScopeString(scopeList []string) string {
