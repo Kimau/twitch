@@ -134,7 +134,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 			ah.AdminChannel <- 1
 			fmt.Fprintf(w, "Admin logged in %s #%s\n---Scope---\n\t%s\n---------\n",
 				authU.token.Username, tID,
-				strings.Join(strings.Split(scopeList[0], " "), "\n\t"))
+				strings.Join(scopeList, "\n\t"))
 		} else {
 			http.Error(w, "Admin Auth has no token", 400)
 		}
