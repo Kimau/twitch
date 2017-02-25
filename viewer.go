@@ -2,8 +2,6 @@ package twitch
 
 import "log"
 
-const ()
-
 // Viewer is basic Viewer
 type Viewer struct {
 	TwitchID string

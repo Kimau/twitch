@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
-	"time"
-
+	"strconv"
 	"strings"
-
-	"io"
+	"time"
 
 	"github.com/go-irc/irc"
 	"golang.org/x/time/rate"
@@ -38,12 +37,12 @@ type chatViewer struct {
 	ID          string
 	nick        string
 	displayName string
-	emoteSets   []int
+	emoteSets   map[int]int
 
 	mod      bool
 	sub      bool
 	userType string
-	badges   []string
+	badges   map[string]int
 	color    string
 
 	lastActive time.Time
@@ -55,6 +54,7 @@ type chatMode struct {
 	emoteOnly     bool
 	followersOnly bool
 	slowMode      bool
+	r9k           bool
 }
 
 type Chat struct {
@@ -161,6 +161,16 @@ func (client *Chat) respondToWelcome(c *irc.Client, m *irc.Message) {
 	c.Write(fmt.Sprintf("JOIN #%s", c.CurrentNick()))
 }
 
+func printDebugTag(m *irc.Message) {
+	tags := ""
+	for k, v := range m.Tags {
+		tags += fmt.Sprintf("%s:\t %s\n", k, v)
+	}
+
+	log.Printf("IRC NOT[%s] %s \n%s \n%s", m.Command, m.Trailing(), strings.Join(m.Params, " -\t "), tags)
+
+}
+
 func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 	printOut, ok := ignoreMsgCmd[m.Command]
 	if ok {
@@ -238,31 +248,148 @@ func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
 
 	case TwitchCmdGlobalUserState:
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		printDebugTag(m)
 
 	case TwitchCmdRoomState:
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		chatChanName := m.Trailing()
+		client.log.Printf("Room State updated %s", chatChanName)
+
+		client.mode = &chatMode{}
+		for tagName, tagVal := range m.Tags {
+			switch tagName {
+			case TwitchTagRoomFollowersOnly:
+				client.mode.followersOnly = false
+				intVal, err := strconv.Atoi(string(tagVal))
+				if err != nil {
+					client.log.Println(tagName, tagVal, err)
+				} else if intVal > 0 {
+					client.mode.followersOnly = true
+				}
+
+			case TwitchTagRoomR9K:
+				client.mode.r9k = false
+				intVal, err := strconv.Atoi(string(tagVal))
+				if err != nil {
+					client.log.Println(tagName, tagVal, err)
+				} else if intVal > 0 {
+					client.mode.r9k = true
+				}
+			case TwitchTagRoomSlow:
+				client.mode.slowMode = false
+				intVal, err := strconv.Atoi(string(tagVal))
+				if err != nil {
+					client.log.Println(tagName, tagVal, err)
+				} else if intVal > 0 {
+					client.mode.slowMode = true
+				}
+			case TwitchTagRoomSubOnly:
+				client.mode.subsOnly = false
+				intVal, err := strconv.Atoi(string(tagVal))
+				if err != nil {
+					client.log.Println(tagName, tagVal, err)
+				} else if intVal > 0 {
+					client.mode.subsOnly = true
+				}
+
+			case TwitchTagRoomLang:
+				client.mode.lang = string(tagVal)
+
+			case TwitchTagRoomEmote:
+				client.mode.emoteOnly = false
+				intVal, err := strconv.Atoi(string(tagVal))
+				if err != nil {
+					client.log.Println(tagName, tagVal, err)
+				} else if intVal > 0 {
+					client.mode.emoteOnly = true
+				}
+
+			}
+		}
 
 	case TwitchCmdUserNotice:
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		printDebugTag(m)
 
 	case TwitchCmdUserState:
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		chatChanName := m.Trailing()
+		viewerName := c.CurrentNick()
+
+		client.log.Printf("User State updated from %s in %s", viewerName, chatChanName)
+
+		viewer, ok := client.viewers[m.Name]
+		if !ok {
+			viewer = &chatViewer{
+				nick: viewerName,
+			}
+		}
+
+		viewer.lastActive = time.Now()
+
+		for tagName, tagVal := range m.Tags {
+			switch tagName {
+			case TwitchTagUserBadge:
+				viewer.badges = make(map[string]int)
+				for _, badgeStr := range strings.Split(string(tagVal), ",") {
+					iVal := 0
+					t := strings.Split(badgeStr, "/")
+					testVal, err := strconv.Atoi(t[1])
+					if err != nil {
+						log.Println(tagName, badgeStr, err)
+					} else {
+						iVal = testVal
+					}
+					viewer.badges[t[0]] = iVal
+				}
+
+			case TwitchTagUserColor:
+				viewer.color = string(tagVal)
+			case TwitchTagUserDisplayName:
+				viewer.displayName = string(tagVal)
+			case TwitchTagUserEmoteSet:
+				emoteStrings := strings.Split(string(tagVal), ",")
+				viewer.emoteSets = make(map[int]int)
+				for _, v := range emoteStrings {
+					vInt, err := strconv.Atoi(v)
+					if err != nil {
+						log.Println(tagName, tagVal, err)
+					} else {
+						viewer.emoteSets[vInt] = 1
+					}
+				}
+			case TwitchTagUserMod:
+				intVal, err := strconv.Atoi(string(tagVal))
+				if err != nil {
+					log.Println(tagName, tagVal, err)
+				} else {
+					viewer.mod = (intVal > 0)
+				}
+			case TwitchTagUserSub:
+				intVal, err := strconv.Atoi(string(tagVal))
+				if err != nil {
+					log.Println(tagName, tagVal, err)
+				} else {
+					viewer.sub = (intVal > 0)
+				}
+			case TwitchTagUserType:
+				viewer.userType = string(tagVal)
+			}
+		}
+
+		client.viewers[viewerName] = viewer
 
 	case TwitchCmdHostTarget:
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		printDebugTag(m)
 
 	case TwitchCmdReconnect:
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		printDebugTag(m)
 
 	case IrcCmdPrivmsg:
 		// < PRIVMSG #<channel> :This is a sample message
 		// > :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :This is a sample message
 		// > @badges=<badges>;bits=<bits>;color=<color>;display-name=<display-name>;emotes=<emotes>;id=<id>;mod=<mod>;room-id=<room-id>;subscriber=<subscriber>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		printDebugTag(m)
 
 	case IrcCmdNotice:
-		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
+		printDebugTag(m)
 
 	case IrcCmdPing:
 

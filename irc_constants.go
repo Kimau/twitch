@@ -332,3 +332,20 @@ const (
 	TwitchMsgUnbanSuccess        = "unban_success"          // <user> is no longer banned from this chat room.
 	TwitchMsgUnrecognizedCmd     = "unrecognized_cmd"       // Unrecognized command: <command>
 )
+
+// Twitch Tags
+const (
+	TwitchTagUserBadge         = "badges"
+	TwitchTagUserColor         = "color"
+	TwitchTagUserDisplayName   = "display-name"
+	TwitchTagUserEmoteSet      = "emote-sets"
+	TwitchTagUserMod           = "mod"
+	TwitchTagUserSub           = "subscriber"
+	TwitchTagUserType          = "user-type"
+	TwitchTagRoomFollowersOnly = "followers-only"
+	TwitchTagRoomR9K           = "r9k"
+	TwitchTagRoomSlow          = "slow"
+	TwitchTagRoomSubOnly       = "subs-only"
+	TwitchTagRoomLang          = "broadcaster-lang"
+	TwitchTagRoomEmote         = "emote-only"
+)
