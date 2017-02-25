@@ -127,8 +127,21 @@ func CreateTwitchClient(reqScopes []string) (*Client, error) {
 }
 
 // GetAuth - Returns Auth Code not sure if this is okay but I need it for twitch interaction
-func (ah *Client) GetAuth() (bool, string) {
-	return ah.AdminAuth.GetAuth()
+func (ah *Client) GetAuth() string {
+	b, c := ah.AdminAuth.GetAuth()
+	if b {
+		return c
+	}
+	return ""
+}
+
+// GetNick - Returns the name of the streamer account
+func (ah *Client) GetNick() string {
+	if ah.AdminAuth != nil && ah.AdminAuth.token != nil {
+		return ah.AdminAuth.token.Username
+	}
+
+	return ""
 }
 
 // AdminHTTP for backoffice requests
