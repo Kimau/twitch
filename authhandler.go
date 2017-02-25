@@ -135,6 +135,21 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 			fmt.Fprintf(w, "Admin logged in %s #%s\n---Scope---\n\t%s\n---------\n",
 				authU.token.Username, tID,
 				strings.Join(scopeList, "\n\t"))
+
+			if ah.AdminAuth.scopes[scopeChatLogin] {
+				ah.Chat, err = createIrcClient(ah.AdminAuth)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+
+				go func() {
+					err := ah.Chat.StartRunLoop()
+					if err != nil {
+						log.Fatal(err)
+					}
+				}()
+			}
+
 		} else {
 			http.Error(w, "Admin Auth has no token", 400)
 		}

@@ -39,13 +39,15 @@ func TestUserFull(t *testing.T) {
 			UpdatedAtStr:    "2016-12-14T01:01:44Z",
 		},
 
-		Email:            "email-address@provider.com",
-		EmailIsVerified:  true,
-		Partnered:        false,
-		TwitterConnected: false,
-		Notification: UserNotification{
-			Email: false,
-			Push:  true,
+		UserPersonal: &UserPersonal{
+			Email:            "email-address@provider.com",
+			EmailIsVerified:  true,
+			Partnered:        false,
+			TwitterConnected: false,
+			Notification: UserNotification{
+				Email: false,
+				Push:  true,
+			},
 		},
 	}
 

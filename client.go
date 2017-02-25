@@ -93,6 +93,8 @@ type Client struct {
 	AdminAuth    *UserAuth
 	AdminChannel chan int
 
+	Chat *Chat
+
 	Viewers       map[string]*Viewer   // By Twitch ID (not name)
 	PendingLogins map[string]time.Time // Twitch ID by State for Login
 
