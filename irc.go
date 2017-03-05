@@ -33,11 +33,13 @@ var (
 	}
 )
 
-type chatViewer struct {
-	ID          string
-	nick        string
+type ircNick string
+
+type chatter struct {
+	nick        ircNick
 	displayName string
 	emoteSets   map[int]int
+	bits        int
 
 	mod      bool
 	sub      bool
@@ -63,14 +65,17 @@ type Chat struct {
 	config  irc.ClientConfig
 	limiter *rate.Limiter
 
-	viewers map[string]*chatViewer
-	mode    *chatMode
+	self *chatter
+	mode     *chatMode
 
 	messageOfTheDay []string
-	viewerNames     []string
+	chatterNames    []ircNick
+	activeChat map[TwitchID]ircNick 
 
 	log    *log.Logger
 	msgLog bytes.Buffer
+
+	client *Client
 }
 
 // IrcAuthProvider - Provides Auth normally expects UserAuth
@@ -82,7 +87,7 @@ func init() {
 
 }
 
-func createIrcClient(auth IrcAuthProvider) (*Chat, error) {
+func createIrcClient(auth IrcAuthProvider, client *Client) (*Chat, error) {
 
 	log.Println("Creating IRC Client")
 
@@ -91,7 +96,7 @@ func createIrcClient(auth IrcAuthProvider) (*Chat, error) {
 		return nil, fmt.Errorf("Associated user has no valid Auth")
 	}
 
-	client := &Chat{
+	chat := &Chat{
 		Server:  serverAddr,
 		verbose: *flagIrcVerbose,
 		config: irc.ClientConfig{
@@ -100,65 +105,70 @@ func createIrcClient(auth IrcAuthProvider) (*Chat, error) {
 			User: "Username",
 			Name: "Full Name",
 		},
+		activeChat: make(map[TwitchID]ircNick),
+
+		client: client,
 	}
 
-	client.viewers = make(map[string]*chatViewer)
-	client.setupLog(&client.msgLog)
-	client.log.Println("+------------ New Log ------------+")
-	client.config.Handler = client
-	client.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
+	chat.setupLog(&chat.msgLog)
+	chat.log.Println("+------------ New Log ------------+")
+	chat.config.Handler = chat
+	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
 
-	return client, nil
+	return chat, nil
 }
 
-func (client *Chat) setupLog(newTarget io.Writer) {
-	client.log = log.New(newTarget, "IRC: ", log.Ltime)
-	if client.log == nil {
+func (c *Chat) setupLog(newTarget io.Writer) {
+	c.log = log.New(newTarget, "IRC: ", log.Ltime)
+	if c.log == nil {
 		log.Fatalln("Log shouldn't be null")
 	}
 }
 
-func (client *Chat) GetLog() *bytes.Buffer {
-	return &client.msgLog
+func (c *Chat) GetLog() *bytes.Buffer {
+	return &c.msgLog
 }
 
-func (client *Chat) StartRunLoop() error {
-	conn, err := net.Dial("tcp", client.Server)
+func (c *Chat) StartRunLoop() error {
+	conn, err := net.Dial("tcp", c.Server)
 	if err != nil {
 		return err
 	}
 
-	c := irc.NewClient(conn, client.config)
+	irc := irc.NewClient(conn, c.config)
 
-	if client.verbose {
+	if c.verbose {
 		// In Verbose mode log all messages
-		c.Reader.DebugCallback = func(m string) {
+		irc.Reader.DebugCallback = func(m string) {
 			log.Printf("IRC (V) >> %s", m)
 		}
 
-		c.Writer.DebugCallback = func(m string) {
-			client.limiter.Limit()
+		irc.Writer.DebugCallback = func(m string) {
+			c.limiter.Limit()
 			log.Printf("IRC (V) << %s", m)
 		}
 
 	} else {
 		// Just Rate Limit
-		c.Writer.DebugCallback = func(string) {
-			client.limiter.Limit()
+		irc.Writer.DebugCallback = func(string) {
+			c.limiter.Limit()
 		}
 	}
 
 	log.Println("IRC Connected")
 
-	err = c.Run()
+	err = irc.Run()
 	return err
 }
 
-func (client *Chat) respondToWelcome(c *irc.Client, m *irc.Message) {
-	c.Write("CAP REQ :twitch.tv/membership")
-	c.Write("CAP REQ :twitch.tv/tags")
-	c.Write("CAP REQ :twitch.tv/commands")
-	c.Write(fmt.Sprintf("JOIN #%s", c.CurrentNick()))
+func (c *Chat) respondToWelcome(irc *irc.Client, m *irc.Message) {
+	c.activeChat = make(map[TwitchID]ircNick)
+	c.chatterNames = []ircNick{}
+
+	irc.Write("CAP REQ :twitch.tv/membership")
+	irc.Write("CAP REQ :twitch.tv/tags")
+	irc.Write("CAP REQ :twitch.tv/commands")
+	irc.Write(fmt.Sprintf("JOIN #%s", irc.CurrentNick()))
 }
 
 func printDebugTag(m *irc.Message) {
@@ -171,11 +181,138 @@ func printDebugTag(m *irc.Message) {
 
 }
 
-func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
+func (c *Chat) UpdateChatterFromTags(chatterName ircNick, m *irc.Message) *chatter {
+	var cu *chatter
+	id, ok := m.Tags[TwitchTagUserId]
+	if ok {
+		vwr := c.client.GetViewer(TwitchID(id))
+
+		if vwr.Chatter == nil {
+			vwr.Chatter = &chatter{
+				nick: chatterName,
+			}
+		}
+		cu = vwr.Chatter
+	} else {
+		if c.self == nil {
+			c.self = &chatter{
+				nick: ircNick( c.client.GetNick()),
+			}
+		}
+
+		cu = c.self
+	}
+	cu.lastActive = time.Now()
+
+	for tagName, tagVal := range m.Tags {
+		switch tagName {
+
+		case TwitchTagUserTurbo:
+			if cu.badges == nil {
+				cu.badges = make(map[string]int)
+			}
+			cu.badges[TwitchTagUserTurbo] = 1
+
+		case TwitchTagUserBadge:
+			cu.badges = make(map[string]int)
+			for _, badgeStr := range strings.Split(string(tagVal), ",") {
+				iVal := 0
+				t := strings.Split(badgeStr, "/")
+				testVal, err := strconv.Atoi(t[1])
+				if err != nil {
+					log.Println(tagName, badgeStr, err)
+				} else {
+					iVal = testVal
+				}
+				cu.badges[t[0]] = iVal
+			}
+
+		case TwitchTagUserColor:
+			cu.color = string(tagVal)
+		case TwitchTagUserDisplayName:
+			cu.displayName = string(tagVal)
+		case TwitchTagUserEmoteSet:
+			emoteStrings := strings.Split(string(tagVal), ",")
+			cu.emoteSets = make(map[int]int)
+			for _, v := range emoteStrings {
+				vInt, err := strconv.Atoi(v)
+				if err != nil {
+					log.Println(tagName, tagVal, err)
+				} else {
+					cu.emoteSets[vInt] = 1
+				}
+			}
+		case TwitchTagUserMod:
+			intVal, err := strconv.Atoi(string(tagVal))
+			if err != nil {
+				log.Println(tagName, tagVal, err)
+			} else {
+				cu.mod = (intVal > 0)
+			}
+		case TwitchTagUserSub:
+			intVal, err := strconv.Atoi(string(tagVal))
+			if err != nil {
+				log.Println(tagName, tagVal, err)
+			} else {
+				cu.sub = (intVal > 0)
+			}
+		case TwitchTagUserType:
+			cu.userType = string(tagVal)
+		}
+	}
+
+	return cu
+}
+
+func (c *Chat) ProcessNameList(printNames bool) {
+	uList, err := c.client.User.GetByName(c.chatterNames)
+	if(err != nil) {
+		log.Println(err)
+		return
+	}
+
+	for _, u :=range uList {
+		c.activeChat[u.ID] = u.Name
+
+		v, ok := c.client.Viewers[u.ID]
+		if(!ok) {
+			c.client.Viewers[u.ID] := &Viewer{
+				TwitchID: u.ID,
+				User: &u,
+				client:c.client, 
+			}
+		}
+	}
+	
+	if printNames {
+		nickformated := ""
+			nickLength := 15
+			
+			for i, v := range c.chatterNames {
+
+				vStr := string(v)
+		
+				if len(vStr) > nickLength {
+					vStr = vStr[0:nickLength]
+				}
+				for len(vStr) < nickLength {
+					vStr += " "
+				}
+				if i > 0 && (i%4) == 0 {
+					nickformated += "\n\t" + vStr
+				} else {
+					nickformated += "\t" + vStr
+				}
+			}
+			c.log.Printf("--- Names ---\n%s\n-------------", nickformated)		
+	}
+}
+
+func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 	printOut, ok := ignoreMsgCmd[m.Command]
 	if ok {
 		if printOut {
-			client.log.Printf("IRC [%s] \t %s", m.Command, m.Trailing())
+			c.log.Printf("IRC [%s] \t %s", m.Command, m.Trailing())
 		}
 		return
 	}
@@ -183,48 +320,29 @@ func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 	switch m.Command {
 	case IrcReplyWelcome: // 001 is a welcome event, so we join channels there
 		log.Println("Respondto Welcome")
-		client.respondToWelcome(c, m)
+		c.respondToWelcome(irc, m)
 
 		// Message of the Day
 	case IrcReplyMotdstart:
-		client.messageOfTheDay = []string{}
+		c.messageOfTheDay = []string{}
 
 	case IrcReplyMotd:
-		client.messageOfTheDay = append(client.messageOfTheDay, m.Trailing())
+		c.messageOfTheDay = append(c.messageOfTheDay, m.Trailing())
 
 	case IrcReplyEndofmotd:
-		client.log.Printf(
+		c.log.Printf(
 			"--- Message of the Day ---\n\t%s \n-----------------------------",
-			strings.Join(client.messageOfTheDay, "\n\t"))
+			strings.Join(c.messageOfTheDay, "\n\t"))
 		// End of Message of the Day
 
 	// Name List
 	case IrcReplyNamreply:
-		client.viewerNames = append(client.viewerNames, strings.Split(m.Trailing(), " ")...)
+	for _, in := range strings.Split(m.Trailing(), " ") {
+		c.chatterNames = append(c.chatterNames, ircNick(in))
+	}
 
 	case IrcReplyEndofnames:
-		nickformated := ""
-		nickLength := 15
-		for i, v := range client.viewerNames {
-			_, ok := client.viewers[v]
-			if !ok {
-				client.viewers[v] = nil
-			}
-
-			if len(v) > nickLength {
-				v = v[0:nickLength]
-			}
-			for len(v) < nickLength {
-				v += " "
-			}
-			if i > 0 && (i%4) == 0 {
-				nickformated += "\n\t" + v
-			} else {
-				nickformated += "\t" + v
-			}
-		}
-		client.log.Printf("--- Names ---\n%s\n-------------", nickformated)
-
+		c.ProcessNameList(true)
 		// End of Name List
 
 	case IrcCap:
@@ -237,13 +355,41 @@ func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 			m.Trailing())
 
 	case IrcCmdJoin: // User Joined Channel
-		client.log.Printf("JOIN %s", m.Name)
-		client.viewers[m.Name] = nil
+		c.log.Printf("JOIN %s", m.Name)
+		nick := ircNick(m.Name)
+		v := c.client.FindViewerIdByName(nick)
+		if(v != nil) {
+			c.activeChat[v.TwitchID] = v.Nick()
+			return
+		}
+			uList, err := c.client.User.GetByName([]ircNick{nick})
+			if(err != nil) {
+				log.Printf("Unable to find %s", nick)
+				return
+			}
+			
+		c.activeChat[uList[0].ID] = nick
 
 	case IrcCmdPart: // User Parted Channel
-		client.log.Printf("PART %s", m.Name)
-		delete(client.viewers, m.Name)
+		c.log.Printf("PART %s", m.Name)
+		nick := ircNick(m.Name)
+		v := c.client.FindViewerIdByName(nick)
+		if(v != nil) {
 
+		delete(c.activeChat, v.TwitchID)
+
+			return 
+		}
+
+			uList, err := c.client.User.GetByName([]ircNick{nick})
+			if(err != nil) {
+				log.Printf("Unable to find %s", nick)
+				return
+			}
+			
+		c.activeChat[uList[0].ID] = nick
+
+		
 	case TwitchCmdClearChat:
 		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
 
@@ -252,55 +398,55 @@ func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 
 	case TwitchCmdRoomState:
 		chatChanName := m.Trailing()
-		client.log.Printf("Room State updated %s", chatChanName)
+		c.log.Printf("Room State updated %s", chatChanName)
 
-		client.mode = &chatMode{}
+		c.mode = &chatMode{}
 		for tagName, tagVal := range m.Tags {
 			switch tagName {
 			case TwitchTagRoomFollowersOnly:
-				client.mode.followersOnly = false
+				c.mode.followersOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					client.log.Println(tagName, tagVal, err)
+					c.log.Println(tagName, tagVal, err)
 				} else if intVal > 0 {
-					client.mode.followersOnly = true
+					c.mode.followersOnly = true
 				}
 
 			case TwitchTagRoomR9K:
-				client.mode.r9k = false
+				c.mode.r9k = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					client.log.Println(tagName, tagVal, err)
+					c.log.Println(tagName, tagVal, err)
 				} else if intVal > 0 {
-					client.mode.r9k = true
+					c.mode.r9k = true
 				}
 			case TwitchTagRoomSlow:
-				client.mode.slowMode = false
+				c.mode.slowMode = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					client.log.Println(tagName, tagVal, err)
+					c.log.Println(tagName, tagVal, err)
 				} else if intVal > 0 {
-					client.mode.slowMode = true
+					c.mode.slowMode = true
 				}
 			case TwitchTagRoomSubOnly:
-				client.mode.subsOnly = false
+				c.mode.subsOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					client.log.Println(tagName, tagVal, err)
+					c.log.Println(tagName, tagVal, err)
 				} else if intVal > 0 {
-					client.mode.subsOnly = true
+					c.mode.subsOnly = true
 				}
 
 			case TwitchTagRoomLang:
-				client.mode.lang = string(tagVal)
+				c.mode.lang = string(tagVal)
 
 			case TwitchTagRoomEmote:
-				client.mode.emoteOnly = false
+				c.mode.emoteOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					client.log.Println(tagName, tagVal, err)
+					c.log.Println(tagName, tagVal, err)
 				} else if intVal > 0 {
-					client.mode.emoteOnly = true
+					c.mode.emoteOnly = true
 				}
 
 			}
@@ -311,70 +457,10 @@ func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 
 	case TwitchCmdUserState:
 		chatChanName := m.Trailing()
-		viewerName := c.CurrentNick()
+		chatterName := ircNick(irc.CurrentNick())
 
-		client.log.Printf("User State updated from %s in %s", viewerName, chatChanName)
-
-		viewer, ok := client.viewers[m.Name]
-		if !ok {
-			viewer = &chatViewer{
-				nick: viewerName,
-			}
-		}
-
-		viewer.lastActive = time.Now()
-
-		for tagName, tagVal := range m.Tags {
-			switch tagName {
-			case TwitchTagUserBadge:
-				viewer.badges = make(map[string]int)
-				for _, badgeStr := range strings.Split(string(tagVal), ",") {
-					iVal := 0
-					t := strings.Split(badgeStr, "/")
-					testVal, err := strconv.Atoi(t[1])
-					if err != nil {
-						log.Println(tagName, badgeStr, err)
-					} else {
-						iVal = testVal
-					}
-					viewer.badges[t[0]] = iVal
-				}
-
-			case TwitchTagUserColor:
-				viewer.color = string(tagVal)
-			case TwitchTagUserDisplayName:
-				viewer.displayName = string(tagVal)
-			case TwitchTagUserEmoteSet:
-				emoteStrings := strings.Split(string(tagVal), ",")
-				viewer.emoteSets = make(map[int]int)
-				for _, v := range emoteStrings {
-					vInt, err := strconv.Atoi(v)
-					if err != nil {
-						log.Println(tagName, tagVal, err)
-					} else {
-						viewer.emoteSets[vInt] = 1
-					}
-				}
-			case TwitchTagUserMod:
-				intVal, err := strconv.Atoi(string(tagVal))
-				if err != nil {
-					log.Println(tagName, tagVal, err)
-				} else {
-					viewer.mod = (intVal > 0)
-				}
-			case TwitchTagUserSub:
-				intVal, err := strconv.Atoi(string(tagVal))
-				if err != nil {
-					log.Println(tagName, tagVal, err)
-				} else {
-					viewer.sub = (intVal > 0)
-				}
-			case TwitchTagUserType:
-				viewer.userType = string(tagVal)
-			}
-		}
-
-		client.viewers[viewerName] = viewer
+		c.log.Printf("User State updated from %s in %s", chatterName, chatChanName)
+		c.UpdateChatterFromTags(chatterName, m)
 
 	case TwitchCmdHostTarget:
 		printDebugTag(m)
@@ -386,7 +472,24 @@ func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 		// < PRIVMSG #<channel> :This is a sample message
 		// > :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :This is a sample message
 		// > @badges=<badges>;bits=<bits>;color=<color>;display-name=<display-name>;emotes=<emotes>;id=<id>;mod=<mod>;room-id=<room-id>;subscriber=<subscriber>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
-		printDebugTag(m)
+		// Trailing = <message>
+		// Param[0] channel
+		v := c.UpdateChatterFromTags(ircNick(m.Name), m)
+		bits, ok := m.Tags[TwitchTagBits]
+
+		if ok {
+			bVal, err := strconv.Atoi(string(bits))
+			if err != nil {
+				log.Print("Bits error -", m, err)
+			} else {
+				v.bits += bVal
+				c.log.Printf("BITS %d \t %s: \t%s", 
+				bVal, v.NameWithBadge(), m.Trailing())
+			}
+
+		} else {
+			c.log.Printf("%s: \t%s", v.NameWithBadge(), m.Trailing())
+		}
 
 	case IrcCmdNotice:
 		printDebugTag(m)
@@ -396,4 +499,13 @@ func (client *Chat) Handle(c *irc.Client, m *irc.Message) {
 	default:
 		log.Printf("IRC ???[%s] \t %+v", m.Command, m)
 	}
+}
+
+func (vwr *chatter) NameWithBadge() string {
+	r := ""
+	for n,v := vwr.badges {
+		r += n[0] + v
+ 	}
+	r += string(vwr.nick)
+	return r
 }

@@ -56,7 +56,7 @@ func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request
 
 func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
 	myState := GenerateRandomString(16)
-	ah.PendingLogins[myState] = time.Now()
+	ah.PendingLogins[OAuthState(myState)] = time.Now()
 
 	fullRedirStr := fmt.Sprintf(baseURL,
 		rootURL,
@@ -89,7 +89,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 
 	var authU *UserAuth
 	isAdmin := false
-	stateVal := stateList[0]
+	stateVal := OAuthState(stateList[0])
 	// Check if Admin Login
 	if (ah.AdminAuth.token == nil) && stateVal == ah.AdminAuth.oauthState {
 		authU = ah.AdminAuth
@@ -137,7 +137,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 				strings.Join(scopeList, "\n\t"))
 
 			if ah.AdminAuth.scopes[scopeChatLogin] {
-				ah.Chat, err = createIrcClient(ah.AdminAuth)
+				ah.Chat, err = createIrcClient(ah.AdminAuth, ah)
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				}
@@ -185,7 +185,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", redirURL)
 	data.Set("code", authU.ircCode)
-	data.Set("state", authU.oauthState)
+	data.Set("state", string(authU.oauthState))
 	payload := strings.NewReader(data.Encode())
 
 	// Server get Auth Code

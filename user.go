@@ -21,10 +21,10 @@ Unblock     | Unblock User                       | Unblocks the target user.
 
 // User - Twitch User
 type User struct {
-	ID          string `json:"_id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
-	Bio         string `json:"bio,omitempty"` // "Just a gamer playing games and chatting. :)"
+	ID          TwitchID `json:"_id"`
+	Name        ircNick  `json:"name"`
+	DisplayName string   `json:"display_name,omitempty"`
+	Bio         string   `json:"bio,omitempty"` // "Just a gamer playing games and chatting. :)"
 
 	Logo     string `json:"logo,omitempty"` // "https://static-cdn.jtvnw.net/jtv_user_pictures/dallas-profile_image-1a2c906ee2c35f12-300x300.png",
 	UserType string `json:"type,omitempty"` // staff
@@ -87,9 +87,9 @@ func (u *UsersMethod) GetMe() (*UserFull, error) {
 }
 
 // Get - Get User by ID
-func (u *UsersMethod) Get(id string) (*User, error) {
+func (u *UsersMethod) Get(id TwitchID) (*User, error) {
 	var user User
-	_, err := u.client.Get(u.au, "users/"+id, &user)
+	_, err := u.client.Get(u.au, "users/"+string(id), &user)
 	if err != nil {
 		return nil, err
 	}
@@ -98,14 +98,20 @@ func (u *UsersMethod) Get(id string) (*User, error) {
 }
 
 // GetByName - Get User by v3 Name
-func (u *UsersMethod) GetByName(names []string) ([]User, error) {
+func (u *UsersMethod) GetByName(names []ircNick) ([]User, error) {
 
 	uList := struct {
 		Total    int    `json:"_total"`
 		UserList []User `json:"users"`
 	}{}
 
-	_, err := u.client.Get(u.au, "users?login="+strings.Join(names, ","), &uList)
+	reqStr := "users?login="
+	for _,n := range names {
+		reqStr+= string(n) + ","
+	}
+	reqStr = strings.TrimRight(reqStr, ",")
+
+	_, err := u.client.Get(u.au, reqStr, &uList)
 	if err != nil {
 		return nil, err
 	}

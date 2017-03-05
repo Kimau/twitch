@@ -335,6 +335,7 @@ const (
 
 // Twitch Tags
 const (
+	TwitchTagUserId            = "id"
 	TwitchTagUserBadge         = "badges"
 	TwitchTagUserColor         = "color"
 	TwitchTagUserDisplayName   = "display-name"
@@ -342,10 +343,21 @@ const (
 	TwitchTagUserMod           = "mod"
 	TwitchTagUserSub           = "subscriber"
 	TwitchTagUserType          = "user-type"
+	TwitchTagUserTurbo         = "turbo"
+	TwitchTagRoomId            = "room-id"
 	TwitchTagRoomFollowersOnly = "followers-only"
 	TwitchTagRoomR9K           = "r9k"
 	TwitchTagRoomSlow          = "slow"
 	TwitchTagRoomSubOnly       = "subs-only"
 	TwitchTagRoomLang          = "broadcaster-lang"
 	TwitchTagRoomEmote         = "emote-only"
+	TwitchTagBits              = "bits"
+)
+
+const (
+	TwitchBadgeStaff       = "staff"
+	TwitchBadgeTurbo       = "turbo"
+	TwitchBadgeSub         = "sub"
+	TwitchBadgeMod         = "mod"
+	TwitchBadgeBroadcaster = "broadcaster"
 )

@@ -84,6 +84,9 @@ var (
 	DefaultViewerScope = []string{}
 )
 
+type TwitchID string
+type OAuthState string
+
 // Client - Twitch OAuth Client
 type Client struct {
 	httpClient *http.Client
@@ -95,8 +98,8 @@ type Client struct {
 
 	Chat *Chat
 
-	Viewers       map[string]*Viewer   // By Twitch ID (not name)
-	PendingLogins map[string]time.Time // Twitch ID by State for Login
+	Viewers       map[TwitchID]*Viewer
+	PendingLogins map[OAuthState]time.Time
 
 	User    *UsersMethod
 	Channel *ChannelsMethod
@@ -111,13 +114,13 @@ func CreateTwitchClient(reqScopes []string) (*Client, error) {
 		httpClient:   &http.Client{},
 		AdminChannel: make(chan int, 3),
 
-		Viewers:       make(map[string]*Viewer),
-		PendingLogins: make(map[string]time.Time),
+		Viewers:       make(map[TwitchID]*Viewer),
+		PendingLogins: make(map[OAuthState]time.Time),
 	}
 
 	kb.AdminAuth = &UserAuth{
 		token:      nil,
-		oauthState: GenerateRandomString(16),
+		oauthState: OAuthState(GenerateRandomString(16)),
 		scopes:     make(map[string]bool),
 	}
 	kb.AdminAuth.updateScope(reqScopes)
@@ -138,7 +141,7 @@ func (ah *Client) GetAuth() string {
 }
 
 // GetNick - Returns the name of the streamer account
-func (ah *Client) GetNick() string {
+func (ah *Client) GetNick() ircNick {
 	if ah.AdminAuth != nil && ah.AdminAuth.token != nil {
 		return ah.AdminAuth.token.Username
 	}
@@ -170,7 +173,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	case strings.HasPrefix(relPath, "user"):
 		userName := regexp.MustCompile("username/([\\w]+)/*")
 		r := userName.FindStringSubmatch(relPath)
-		nameList := []string{r[1]}
+		nameList := []ircNick{ircNick(r[1])}
 		uf, err := ah.User.GetByName(nameList)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -211,7 +214,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	cList := strings.Split(c.Value, ":")
-	tid := cList[0]
+	tid := TwitchID(cList[0])
 
 	// Try Find User
 	u, ok := ah.Viewers[tid]

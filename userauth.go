@@ -18,16 +18,16 @@ type authToken struct {
 		UpdatedAtStr    string   `json:"updated_at"` // 2016-12-14T01:01:44Z
 		ScopeList       []string `json:"scopes"`
 	} `json:"authorization"`
-	ClientID string `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"
-	UserID   string `json:"user_id"`   // "44322889"
-	Username string `json:"user_name"` // "dallas"
-	IsValid  bool   `json:"valid"`     // true
+	ClientID string   `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"
+	UserID   TwitchID `json:"user_id"`   // "44322889"
+	Username ircNick  `json:"user_name"` // "dallas"
+	IsValid  bool     `json:"valid"`     // true
 }
 
 // UserAuth - Used to manage OAuth for Logins
 type UserAuth struct {
 	authcode   string
-	oauthState string
+	oauthState OAuthState
 	ircCode    string
 
 	token *authToken
