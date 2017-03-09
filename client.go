@@ -84,15 +84,12 @@ var (
 	DefaultViewerScope = []string{}
 )
 
-// ID - Numberic Identifier of Twitch Identity
-type ID string
-
 // authInternalState - OAuth State token for security
 type authInternalState string
 
 // Client - Twitch OAuth Client
 type Client struct {
-	httpClient *http.Client
+	httpClient WebClient
 	url        *url.URL
 
 	AdminUser    *User
@@ -144,12 +141,80 @@ func (ah *Client) GetAuth() string {
 }
 
 // GetNick - Returns the name of the streamer account
-func (ah *Client) GetNick() string {
+func (ah *Client) GetNick() IrcNick {
 	if ah.AdminAuth != nil && ah.AdminAuth.token != nil {
-		return string(ah.AdminAuth.token.Username)
+		return ah.AdminAuth.token.Username
 	}
 
 	return ""
+}
+
+// GetViewer - Get Viewer by ID
+func (ah *Client) GetViewer(twitchID ID) *Viewer {
+	v, ok := ah.Viewers[twitchID]
+	if !ok {
+		u, err := ah.User.Get(twitchID)
+		if err != nil {
+			log.Printf("Unable to get User %s\n%s", twitchID, err.Error())
+			return nil
+		}
+
+		ah.Viewers[twitchID] = &Viewer{
+			TwitchID: twitchID,
+			User:     u,
+		}
+	}
+
+	return v
+}
+
+// FindViewer -
+func (ah *Client) FindViewer(nick IrcNick) *Viewer {
+	for _, v := range ah.Viewers {
+		if v.User.Name == nick {
+			return v
+		}
+	}
+
+	userList, err := ah.User.GetByName([]IrcNick{nick})
+	if err != nil {
+		log.Printf("Error in finding %s\n%s", nick, err.Error())
+		return nil
+	}
+
+	return &Viewer{
+		TwitchID: userList[0].ID,
+		User:     &userList[0],
+	}
+}
+
+// UpdateViewers -
+func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
+	userList, err := ah.User.GetByName(nickList)
+	if err != nil {
+		log.Printf("Error in userList \n---\n%s\n---\n%s",
+			JoinNicks(nickList, 4, 18),
+			err.Error())
+		return nil
+	}
+
+	vList := []*Viewer{}
+	for _, u := range userList {
+		v, ok := ah.Viewers[u.ID]
+		if !ok {
+			v = &Viewer{
+				TwitchID: u.ID,
+				User:     &u,
+			}
+			ah.Viewers[u.ID] = v
+		} else {
+			// Update User Data
+			v.User = &u
+		}
+		vList = append(vList, v)
+	}
+
+	return vList
 }
 
 // AdminHTTP for backoffice requests
@@ -176,7 +241,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	case strings.HasPrefix(relPath, "user"):
 		userName := regexp.MustCompile("username/([\\w]+)/*")
 		r := userName.FindStringSubmatch(relPath)
-		nameList := []ircNick{ircNick(r[1])}
+		nameList := []IrcNick{IrcNick(r[1])}
 		uf, err := ah.User.GetByName(nameList)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

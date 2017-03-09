@@ -33,23 +33,6 @@ var (
 	}
 )
 
-type ircNick string
-
-type chatter struct {
-	nick        ircNick
-	displayName string
-	emoteSets   map[int]int
-	bits        int
-
-	mod      bool
-	sub      bool
-	userType string
-	badges   map[string]int
-	color    string
-
-	lastActive time.Time
-}
-
 type chatMode struct {
 	subsOnly      bool
 	lang          string
@@ -59,35 +42,43 @@ type chatMode struct {
 	r9k           bool
 }
 
+// ircAuthProvider - Provides Auth normally expects UserAuth
+type ircAuthProvider interface {
+	GetIrcAuth() (hasauth bool, name string, pass string, addr string)
+}
+
+type viewerProvider interface {
+	GetNick() IrcNick
+	GetViewer(ID) *Viewer
+	FindViewer(IrcNick) *Viewer
+	UpdateViewers([]IrcNick) []*Viewer
+}
+
+// Chat - IRC Chat interface
 type Chat struct {
 	Server  string
 	verbose bool
 	config  irc.ClientConfig
 	limiter *rate.Limiter
 
-	self *chatter
-	mode *chatMode
+	self   *chatter
+	mode   *chatMode
+	InRoom map[IrcNick]*Viewer
 
 	messageOfTheDay []string
-	chatterNames    []ircNick
-	activeChat      map[ID]ircNick
+	nameReplyList   []IrcNick
 
 	log    *log.Logger
 	msgLog bytes.Buffer
 
-	client *Client
-}
-
-// IrcAuthProvider - Provides Auth normally expects UserAuth
-type IrcAuthProvider interface {
-	GetIrcAuth() (hasauth bool, name string, pass string, addr string)
+	viewers viewerProvider
 }
 
 func init() {
 
 }
 
-func createIrcClient(auth IrcAuthProvider, client *Client) (*Chat, error) {
+func createIrcClient(auth ircAuthProvider, vp viewerProvider) (*Chat, error) {
 
 	log.Println("Creating IRC Client")
 
@@ -105,12 +96,10 @@ func createIrcClient(auth IrcAuthProvider, client *Client) (*Chat, error) {
 			User: "Username",
 			Name: "Full Name",
 		},
-		activeChat: make(map[ID]ircNick),
-
-		client: client,
+		viewers: vp,
 	}
 
-	chat.setupLog(&chat.msgLog)
+	chat.SetupLogWriter(&chat.msgLog)
 	chat.log.Println("+------------ New Log ------------+")
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
@@ -118,17 +107,20 @@ func createIrcClient(auth IrcAuthProvider, client *Client) (*Chat, error) {
 	return chat, nil
 }
 
-func (c *Chat) setupLog(newTarget io.Writer) {
+// SetupLogWriter - Set where the log is written to
+func (c *Chat) SetupLogWriter(newTarget io.Writer) {
 	c.log = log.New(newTarget, "IRC: ", log.Ltime)
 	if c.log == nil {
 		log.Fatalln("Log shouldn't be null")
 	}
 }
 
+// GetLog - Getting Chat Log
 func (c *Chat) GetLog() *bytes.Buffer {
 	return &c.msgLog
 }
 
+// StartRunLoop - Start Run Loop
 func (c *Chat) StartRunLoop() error {
 	conn, err := net.Dial("tcp", c.Server)
 	if err != nil {
@@ -162,8 +154,7 @@ func (c *Chat) StartRunLoop() error {
 }
 
 func (c *Chat) respondToWelcome(irc *irc.Client, m *irc.Message) {
-	c.activeChat = make(map[ID]ircNick)
-	c.chatterNames = []ircNick{}
+	c.InRoom = make(map[IrcNick]*Viewer)
 
 	irc.Write("CAP REQ :twitch.tv/membership")
 	irc.Write("CAP REQ :twitch.tv/tags")
@@ -181,133 +172,38 @@ func printDebugTag(m *irc.Message) {
 
 }
 
-func (c *Chat) UpdateChatterFromTags(chatterName ircNick, m *irc.Message) *chatter {
-	var cu *chatter
-	id, ok := m.Tags[TwitchTagUserID]
-	if ok {
-		vwr := c.client.GetViewer(ID(id))
+// JoinNicks - Join a list of Nicks into a string
+func JoinNicks(nl []IrcNick, columns int, nickPadLength int) string {
+	nickformated := ""
+	for i, v := range nl {
+		vStr := string(v)
 
-		if vwr.Chatter == nil {
-			vwr.Chatter = &chatter{
-				nick: chatterName,
-			}
+		if len(vStr) > nickPadLength {
+			vStr = vStr[0:nickPadLength]
 		}
-		cu = vwr.Chatter
-	} else {
-		if c.self == nil {
-			c.self = &chatter{
-				nick: ircNick(c.client.GetNick()),
-			}
+		for len(vStr) < nickPadLength {
+			vStr += " "
 		}
-
-		cu = c.self
-	}
-	cu.lastActive = time.Now()
-
-	for tagName, tagVal := range m.Tags {
-		switch tagName {
-
-		case TwitchTagUserTurbo:
-			if cu.badges == nil {
-				cu.badges = make(map[string]int)
-			}
-			cu.badges[TwitchTagUserTurbo] = 1
-
-		case TwitchTagUserBadge:
-			cu.badges = make(map[string]int)
-			for _, badgeStr := range strings.Split(string(tagVal), ",") {
-				iVal := 0
-				t := strings.Split(badgeStr, "/")
-				testVal, err := strconv.Atoi(t[1])
-				if err != nil {
-					log.Println(tagName, badgeStr, err)
-				} else {
-					iVal = testVal
-				}
-				cu.badges[t[0]] = iVal
-			}
-
-		case TwitchTagUserColor:
-			cu.color = string(tagVal)
-		case TwitchTagUserDisplayName:
-			cu.displayName = string(tagVal)
-		case TwitchTagUserEmoteSet:
-			emoteStrings := strings.Split(string(tagVal), ",")
-			cu.emoteSets = make(map[int]int)
-			for _, v := range emoteStrings {
-				vInt, err := strconv.Atoi(v)
-				if err != nil {
-					log.Println(tagName, tagVal, err)
-				} else {
-					cu.emoteSets[vInt] = 1
-				}
-			}
-		case TwitchTagUserMod:
-			intVal, err := strconv.Atoi(string(tagVal))
-			if err != nil {
-				log.Println(tagName, tagVal, err)
-			} else {
-				cu.mod = (intVal > 0)
-			}
-		case TwitchTagUserSub:
-			intVal, err := strconv.Atoi(string(tagVal))
-			if err != nil {
-				log.Println(tagName, tagVal, err)
-			} else {
-				cu.sub = (intVal > 0)
-			}
-		case TwitchTagUserType:
-			cu.userType = string(tagVal)
+		if i > 0 && (i%columns) == 0 {
+			nickformated += "\n\t" + vStr
+		} else {
+			nickformated += "\t" + vStr
 		}
 	}
 
-	return cu
+	return nickformated
 }
 
-func (c *Chat) ProcessNameList(printNames bool) {
-	uList, err := c.client.User.GetByName(c.chatterNames)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+func (c *Chat) processNameList() {
+	vList := c.viewers.UpdateViewers(c.nameReplyList)
 
-	for _, u := range uList {
-		c.activeChat[u.ID] = u.Name
-
-		_, ok := c.client.Viewers[u.ID]
-		if !ok {
-			c.client.Viewers[u.ID] = &Viewer{
-				TwitchID: u.ID,
-				User:     &u,
-				client:   c.client,
-			}
-		}
-	}
-
-	if printNames {
-		nickformated := ""
-		nickLength := 15
-
-		for i, v := range c.chatterNames {
-
-			vStr := string(v)
-
-			if len(vStr) > nickLength {
-				vStr = vStr[0:nickLength]
-			}
-			for len(vStr) < nickLength {
-				vStr += " "
-			}
-			if i > 0 && (i%4) == 0 {
-				nickformated += "\n\t" + vStr
-			} else {
-				nickformated += "\t" + vStr
-			}
-		}
-		c.log.Printf("--- Names ---\n%s\n-------------", nickformated)
+	for _, v := range vList {
+		nick := v.getNick()
+		c.InRoom[nick] = v
 	}
 }
 
+// Handle - IRC Message
 func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 	printOut, ok := ignoreMsgCmd[m.Command]
 	if ok {
@@ -337,12 +233,18 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	// Name List
 	case IrcReplyNamreply:
+		if c.nameReplyList == nil {
+			c.nameReplyList = []IrcNick{}
+		}
 		for _, in := range strings.Split(m.Trailing(), " ") {
-			c.chatterNames = append(c.chatterNames, ircNick(in))
+			c.nameReplyList = append(c.nameReplyList, IrcNick(in))
 		}
 
 	case IrcReplyEndofnames:
-		c.ProcessNameList(true)
+		c.processNameList()
+		nickformated := JoinNicks(c.nameReplyList, 4, 18)
+		c.log.Printf("--- Names ---\n%s\n-------------", nickformated)
+		c.nameReplyList = nil
 		// End of Name List
 
 	case IrcCap:
@@ -356,38 +258,14 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case IrcCmdJoin: // User Joined Channel
 		c.log.Printf("JOIN %s", m.Name)
-		nick := ircNick(m.Name)
-		v := c.client.FindViewerIDByName(nick)
-		if v != nil {
-			c.activeChat[v.TwitchID] = v.getNick()
-			return
-		}
-		uList, err := c.client.User.GetByName([]ircNick{nick})
-		if err != nil {
-			log.Printf("Unable to find %s", nick)
-			return
-		}
+		nick := IrcNick(m.Name)
 
-		c.activeChat[uList[0].ID] = nick
+		v := c.viewers.FindViewer(nick)
+		c.InRoom[nick] = v
 
 	case IrcCmdPart: // User Parted Channel
 		c.log.Printf("PART %s", m.Name)
-		nick := ircNick(m.Name)
-		v := c.client.FindViewerIDByName(nick)
-		if v != nil {
-
-			delete(c.activeChat, v.TwitchID)
-
-			return
-		}
-
-		uList, err := c.client.User.GetByName([]ircNick{nick})
-		if err != nil {
-			log.Printf("Unable to find %s", nick)
-			return
-		}
-
-		c.activeChat[uList[0].ID] = nick
+		delete(c.InRoom, IrcNick(m.Name))
 
 	case TwitchCmdClearChat:
 		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
@@ -456,10 +334,13 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case TwitchCmdUserState:
 		chatChanName := m.Trailing()
-		chatterName := ircNick(irc.CurrentNick())
-
-		c.log.Printf("User State updated from %s in %s", chatterName, chatChanName)
-		c.UpdateChatterFromTags(chatterName, m)
+		if c.self == nil {
+			c.self = &chatter{
+				nick: IrcNick(irc.CurrentNick()),
+			}
+		}
+		c.self.UpdateChatterFromTags(m)
+		c.log.Printf("User State updated from %s in %s", c.self.nick, chatChanName)
 
 	case TwitchCmdHostTarget:
 		printDebugTag(m)
@@ -473,7 +354,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// > @badges=<badges>;bits=<bits>;color=<color>;display-name=<display-name>;emotes=<emotes>;id=<id>;mod=<mod>;room-id=<room-id>;subscriber=<subscriber>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
 		// Trailing = <message>
 		// Param[0] channel
-		v := c.UpdateChatterFromTags(ircNick(m.Name), m)
+		v := c.viewers.FindViewer(IrcNick(m.Name))
+		v.Chatter.UpdateChatterFromTags(m)
+
 		bits, ok := m.Tags[TwitchTagBits]
 
 		if ok {
@@ -481,13 +364,13 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			if err != nil {
 				log.Print("Bits error -", m, err)
 			} else {
-				v.bits += bVal
+				v.Chatter.bits += bVal
 				c.log.Printf("BITS %d \t %s: \t%s",
-					bVal, v.NameWithBadge(), m.Trailing())
+					bVal, v.Chatter.NameWithBadge(), m.Trailing())
 			}
 
 		} else {
-			c.log.Printf("%s: \t%s", v.NameWithBadge(), m.Trailing())
+			c.log.Printf("%s: \t%s", v.Chatter.NameWithBadge(), m.Trailing())
 		}
 
 	case IrcCmdNotice:

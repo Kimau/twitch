@@ -29,7 +29,12 @@ var (
 	}
 )
 
+///////////////////////////////////////////////////////////////////////////////
 type DummyAuth struct {
+}
+
+func (da *DummyAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr string) {
+	return true, "kimau", "pass", "irc.server.com:6667"
 }
 
 type DummyWriteRead struct {
@@ -38,10 +43,6 @@ type DummyWriteRead struct {
 func (dr *DummyWriteRead) Read(p []byte) (n int, err error)  { return len(p), nil }
 func (dr *DummyWriteRead) Write(p []byte) (n int, err error) { return len(p), nil }
 
-func (da *DummyAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr string) {
-	return true, "kimau", "pass", "irc.server.com:6667"
-}
-
 type DummyHandler struct {
 }
 
@@ -49,36 +50,84 @@ func (dh *DummyHandler) Handle(c *irc.Client, m *irc.Message) {
 
 }
 
-func TestIrcMessage(t *testing.T) {
-	/*
-		dWR := &DummyWriteRead{}
+type DummyViewProvider struct {
+	Viewers map[ID]*Viewer
+}
 
-		// TODO :: Need a Dummy Client which is not connected to Twitch
-
-		c := irc.NewClient(
-			struct {
-				io.Reader
-				io.Writer
-			}{dWR, dWR},
-			irc.ClientConfig{
-				Nick: "TestNick",
-				Pass: "TestPass",
-				User: "TestUser",
-				Name: "My Test Name",
-
-				Handler: &DummyHandler{},
-			})
-
-		for _, v := range msgList {
-			m, err := irc.ParseMessage(v)
-			if err != nil {
-				t.Log(err)
-				t.Fail()
-			}
-
-			c.
-
-			// client.Handle(c, m)
+func (dvp *DummyViewProvider) GetNick() IrcNick { return "kimau" }
+func (dvp *DummyViewProvider) GetViewer(id ID) *Viewer {
+	v, ok := dvp.Viewers[id]
+	if !ok {
+		v = &Viewer{
+			TwitchID: id,
+			User: &User{
+				ID:          id,
+				Name:        IrcNick("DummyName" + GenerateRandomString(4)),
+				DisplayName: "Name" + GenerateRandomString(6),
+			},
 		}
-	*/
+	}
+
+	return v
+}
+func (dvp *DummyViewProvider) FindViewer(nick IrcNick) *Viewer {
+	for _, v := range dvp.Viewers {
+		if v.User.Name == nick {
+			return v
+		}
+	}
+
+	id := ID(GenerateRandomString(10))
+	v := &Viewer{
+		TwitchID: id,
+		User: &User{
+			ID:          id,
+			Name:        nick,
+			DisplayName: string(nick),
+		},
+	}
+	return v
+}
+func (dvp *DummyViewProvider) UpdateViewers(nickList []IrcNick) []*Viewer {
+	vList := []*Viewer{}
+	for _, name := range nickList {
+		vList = append(vList, dvp.FindViewer(name))
+	}
+
+	return vList
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+func TestIrcMessage(t *testing.T) {
+
+	_, nick, pass, serverAddr := (&DummyAuth{}).GetIrcAuth()
+
+	chat := &Chat{
+		Server:  serverAddr,
+		verbose: *flagIrcVerbose,
+		config: irc.ClientConfig{
+			Nick: nick,
+			Pass: pass,
+			User: "Username",
+			Name: "Full Name",
+		},
+		viewers: &DummyViewProvider{},
+	}
+
+	chat.SetupLogWriter(&chat.msgLog)
+	chat.log.Println("+------------ New Log ------------+")
+	chat.config.Handler = chat
+
+	ircClient := irc.NewClient(&DummyWriteRead{}, chat.config)
+
+	for _, v := range msgList {
+		m, err := irc.ParseMessage(v)
+		if err != nil {
+			t.Log(err)
+			t.Fail()
+		}
+
+		chat.Handle(ircClient, m)
+	}
 }

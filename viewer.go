@@ -13,26 +13,8 @@ type Viewer struct {
 	client *Client
 }
 
-// GetViewer - Retrieves the viewer or adds a dummy viewer and requests an update
-func (client *Client) GetViewer(id ID) *Viewer {
-	v, ok := client.Viewers[id]
-
-	if ok {
-		return v
-	}
-
-	v = &Viewer{
-		TwitchID: id,
-		client:   client,
-	}
-	go v.UpdateUser()
-
-	client.Viewers[id] = v
-	return v
-}
-
 // FindViewerIDByName - Attempts to find viewer by ID
-func (client *Client) FindViewerIDByName(name ircNick) *Viewer {
+func (client *Client) FindViewerIDByName(name IrcNick) *Viewer {
 
 	for _, v := range client.Viewers {
 		if v.User != nil && v.User.Name == name {
@@ -55,7 +37,7 @@ func (vw *Viewer) Get(path string, jsonStruct interface{}) (string, error) {
 }
 
 // getNick - Returns short username of current UserAuth
-func (vw *Viewer) getNick() ircNick {
+func (vw *Viewer) getNick() IrcNick {
 	if vw.User != nil {
 		return vw.User.Name
 	}
@@ -64,7 +46,7 @@ func (vw *Viewer) getNick() ircNick {
 		return vw.Auth.token.Username
 	}
 
-	return ircNick("0x" + vw.TwitchID)
+	return IrcNick("0x" + vw.TwitchID)
 }
 
 // UpdateUser - Calls API to update User Data

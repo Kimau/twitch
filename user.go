@@ -22,7 +22,7 @@ Unblock     | Unblock User                       | Unblocks the target user.
 // User - Twitch User
 type User struct {
 	ID          ID      `json:"_id"`
-	Name        ircNick `json:"name"`
+	Name        IrcNick `json:"name"`
 	DisplayName string  `json:"display_name,omitempty"`
 	Bio         string  `json:"bio,omitempty"` // "Just a gamer playing games and chatting. :)"
 
@@ -52,16 +52,6 @@ type UserPersonal struct {
 type UserFull struct {
 	*User
 	*UserPersonal
-}
-
-type Emote struct {
-	Code string `json:"code,omitempty"`
-	ID   int    `json:"id,omitempty"`
-}
-
-type EmoteList []Emote
-type EmoteSets struct {
-	SetMap map[string]EmoteList `json:"emoticon_sets,omitempty"`
 }
 
 // UsersMethod - Contains all the user functions
@@ -98,7 +88,7 @@ func (u *UsersMethod) Get(id ID) (*User, error) {
 }
 
 // GetByName - Get User by v3 Name
-func (u *UsersMethod) GetByName(names []ircNick) ([]User, error) {
+func (u *UsersMethod) GetByName(names []IrcNick) ([]User, error) {
 
 	uList := struct {
 		Total    int    `json:"_total"`
@@ -124,13 +114,13 @@ func (u *UsersMethod) GetByName(names []ircNick) ([]User, error) {
 }
 
 // EmoteList - Get User Emotes
-func (u *UsersMethod) EmoteList(id string) (*EmoteList, error) {
+func (u *UsersMethod) EmoteList(id string) (*[]Emote, error) {
 	err := u.au.checkScope(scopeUserSubscriptions)
 	if err != nil {
 		return nil, err
 	}
 
-	var eList EmoteList
+	var eList []Emote
 	_, err = u.client.Get(u.au, "users/"+id+"/emotes", &eList)
 	if err != nil {
 		return nil, err

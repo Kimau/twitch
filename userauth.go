@@ -20,7 +20,7 @@ type authToken struct {
 	} `json:"authorization"`
 	ClientID string  `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"
 	UserID   ID      `json:"user_id"`   // "44322889"
-	Username ircNick `json:"user_name"` // "dallas"
+	Username IrcNick `json:"user_name"` // "dallas"
 	IsValid  bool    `json:"valid"`     // true
 }
 
