@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -99,4 +100,13 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 	}
 
 	return cu
+}
+
+func (cu *chatter) NameWithBadge() string {
+	r := ""
+	for n, v := range cu.badges {
+		r += fmt.Sprintf("%s%d", n[0:1], v)
+	}
+	r += string(cu.nick)
+	return r
 }

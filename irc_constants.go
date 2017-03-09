@@ -352,6 +352,7 @@ const (
 	TwitchTagRoomLang          = "broadcaster-lang"
 	TwitchTagRoomEmote         = "emote-only"
 	TwitchTagBits              = "bits"
+	TwitchTagMsgID             = "msg-id"
 )
 
 // Twitch Badges
