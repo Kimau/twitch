@@ -56,7 +56,7 @@ func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request
 
 func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
 	myState := GenerateRandomString(16)
-	ah.PendingLogins[OAuthState(myState)] = time.Now()
+	ah.PendingLogins[authInternalState(myState)] = time.Now()
 
 	fullRedirStr := fmt.Sprintf(baseURL,
 		rootURL,
@@ -89,7 +89,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 
 	var authU *UserAuth
 	isAdmin := false
-	stateVal := OAuthState(stateList[0])
+	stateVal := authInternalState(stateList[0])
 	// Check if Admin Login
 	if (ah.AdminAuth.token == nil) && stateVal == ah.AdminAuth.oauthState {
 		authU = ah.AdminAuth
@@ -170,7 +170,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 
 		ah.Viewers[tID] = v
 		http.SetCookie(w, v.Auth.createSessionCookie())
-		fmt.Fprintf(w, "Logged in %s #%s", v.Nick(), tID)
+		fmt.Fprintf(w, "Logged in %s #%s", v.getNick(), tID)
 
 		go v.UpdateUser()
 	}

@@ -84,8 +84,11 @@ var (
 	DefaultViewerScope = []string{}
 )
 
-type TwitchID string
-type OAuthState string
+// ID - Numberic Identifier of Twitch Identity
+type ID string
+
+// authInternalState - OAuth State token for security
+type authInternalState string
 
 // Client - Twitch OAuth Client
 type Client struct {
@@ -98,8 +101,8 @@ type Client struct {
 
 	Chat *Chat
 
-	Viewers       map[TwitchID]*Viewer
-	PendingLogins map[OAuthState]time.Time
+	Viewers       map[ID]*Viewer
+	PendingLogins map[authInternalState]time.Time
 
 	User    *UsersMethod
 	Channel *ChannelsMethod
@@ -114,13 +117,13 @@ func CreateTwitchClient(reqScopes []string) (*Client, error) {
 		httpClient:   &http.Client{},
 		AdminChannel: make(chan int, 3),
 
-		Viewers:       make(map[TwitchID]*Viewer),
-		PendingLogins: make(map[OAuthState]time.Time),
+		Viewers:       make(map[ID]*Viewer),
+		PendingLogins: make(map[authInternalState]time.Time),
 	}
 
 	kb.AdminAuth = &UserAuth{
 		token:      nil,
-		oauthState: OAuthState(GenerateRandomString(16)),
+		oauthState: authInternalState(GenerateRandomString(16)),
 		scopes:     make(map[string]bool),
 	}
 	kb.AdminAuth.updateScope(reqScopes)
@@ -141,9 +144,9 @@ func (ah *Client) GetAuth() string {
 }
 
 // GetNick - Returns the name of the streamer account
-func (ah *Client) GetNick() ircNick {
+func (ah *Client) GetNick() string {
 	if ah.AdminAuth != nil && ah.AdminAuth.token != nil {
-		return ah.AdminAuth.token.Username
+		return string(ah.AdminAuth.token.Username)
 	}
 
 	return ""
@@ -214,7 +217,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	cList := strings.Split(c.Value, ":")
-	tid := TwitchID(cList[0])
+	tid := ID(cList[0])
 
 	// Try Find User
 	u, ok := ah.Viewers[tid]
@@ -231,7 +234,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	http.SetCookie(w, u.Auth.sessionCookie)
-	fmt.Fprintf(w, "You are logged in %s", u.Nick())
+	fmt.Fprintf(w, "You are logged in %s", u.getNick())
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct

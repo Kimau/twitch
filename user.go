@@ -21,10 +21,10 @@ Unblock     | Unblock User                       | Unblocks the target user.
 
 // User - Twitch User
 type User struct {
-	ID          TwitchID `json:"_id"`
-	Name        ircNick  `json:"name"`
-	DisplayName string   `json:"display_name,omitempty"`
-	Bio         string   `json:"bio,omitempty"` // "Just a gamer playing games and chatting. :)"
+	ID          ID      `json:"_id"`
+	Name        ircNick `json:"name"`
+	DisplayName string  `json:"display_name,omitempty"`
+	Bio         string  `json:"bio,omitempty"` // "Just a gamer playing games and chatting. :)"
 
 	Logo     string `json:"logo,omitempty"` // "https://static-cdn.jtvnw.net/jtv_user_pictures/dallas-profile_image-1a2c906ee2c35f12-300x300.png",
 	UserType string `json:"type,omitempty"` // staff
@@ -87,7 +87,7 @@ func (u *UsersMethod) GetMe() (*UserFull, error) {
 }
 
 // Get - Get User by ID
-func (u *UsersMethod) Get(id TwitchID) (*User, error) {
+func (u *UsersMethod) Get(id ID) (*User, error) {
 	var user User
 	_, err := u.client.Get(u.au, "users/"+string(id), &user)
 	if err != nil {
@@ -106,8 +106,8 @@ func (u *UsersMethod) GetByName(names []ircNick) ([]User, error) {
 	}{}
 
 	reqStr := "users?login="
-	for _,n := range names {
-		reqStr+= string(n) + ","
+	for _, n := range names {
+		reqStr += string(n) + ","
 	}
 	reqStr = strings.TrimRight(reqStr, ",")
 

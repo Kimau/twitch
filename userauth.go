@@ -18,16 +18,16 @@ type authToken struct {
 		UpdatedAtStr    string   `json:"updated_at"` // 2016-12-14T01:01:44Z
 		ScopeList       []string `json:"scopes"`
 	} `json:"authorization"`
-	ClientID string   `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"
-	UserID   TwitchID `json:"user_id"`   // "44322889"
-	Username ircNick  `json:"user_name"` // "dallas"
-	IsValid  bool     `json:"valid"`     // true
+	ClientID string  `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"
+	UserID   ID      `json:"user_id"`   // "44322889"
+	Username ircNick `json:"user_name"` // "dallas"
+	IsValid  bool    `json:"valid"`     // true
 }
 
 // UserAuth - Used to manage OAuth for Logins
 type UserAuth struct {
 	authcode   string
-	oauthState OAuthState
+	oauthState authInternalState
 	ircCode    string
 
 	token *authToken
@@ -52,7 +52,7 @@ func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr s
 		return false, "", "", ircServerAddr
 	}
 
-	return true, ua.token.Username, "oauth:" + ua.authcode, ircServerAddr
+	return true, string(ua.token.Username), "oauth:" + ua.authcode, ircServerAddr
 }
 
 func mergeScopeString(scopeList []string) string {
@@ -107,7 +107,7 @@ func (ua *UserAuth) createSessionCookie() *http.Cookie {
 	expiration := time.Now().Add(365 * 24 * time.Hour)
 	ua.sessionCookie = &http.Cookie{
 		Name:    UserAuthSessionCookieName,
-		Value:   ua.token.UserID + ":" + GenerateRandomString(16),
+		Value:   fmt.Sprintf("%s:%s", ua.token.UserID, GenerateRandomString(16)),
 		Domain:  cookieDoman, // Wont work for local host because not valid domain
 		Path:    "/twitch",
 		Expires: expiration,

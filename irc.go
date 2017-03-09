@@ -66,11 +66,11 @@ type Chat struct {
 	limiter *rate.Limiter
 
 	self *chatter
-	mode     *chatMode
+	mode *chatMode
 
 	messageOfTheDay []string
 	chatterNames    []ircNick
-	activeChat map[TwitchID]ircNick 
+	activeChat      map[ID]ircNick
 
 	log    *log.Logger
 	msgLog bytes.Buffer
@@ -105,7 +105,7 @@ func createIrcClient(auth IrcAuthProvider, client *Client) (*Chat, error) {
 			User: "Username",
 			Name: "Full Name",
 		},
-		activeChat: make(map[TwitchID]ircNick),
+		activeChat: make(map[ID]ircNick),
 
 		client: client,
 	}
@@ -162,7 +162,7 @@ func (c *Chat) StartRunLoop() error {
 }
 
 func (c *Chat) respondToWelcome(irc *irc.Client, m *irc.Message) {
-	c.activeChat = make(map[TwitchID]ircNick)
+	c.activeChat = make(map[ID]ircNick)
 	c.chatterNames = []ircNick{}
 
 	irc.Write("CAP REQ :twitch.tv/membership")
@@ -183,9 +183,9 @@ func printDebugTag(m *irc.Message) {
 
 func (c *Chat) UpdateChatterFromTags(chatterName ircNick, m *irc.Message) *chatter {
 	var cu *chatter
-	id, ok := m.Tags[TwitchTagUserId]
+	id, ok := m.Tags[TwitchTagUserID]
 	if ok {
-		vwr := c.client.GetViewer(TwitchID(id))
+		vwr := c.client.GetViewer(ID(id))
 
 		if vwr.Chatter == nil {
 			vwr.Chatter = &chatter{
@@ -196,7 +196,7 @@ func (c *Chat) UpdateChatterFromTags(chatterName ircNick, m *irc.Message) *chatt
 	} else {
 		if c.self == nil {
 			c.self = &chatter{
-				nick: ircNick( c.client.GetNick()),
+				nick: ircNick(c.client.GetNick()),
 			}
 		}
 
@@ -266,45 +266,45 @@ func (c *Chat) UpdateChatterFromTags(chatterName ircNick, m *irc.Message) *chatt
 
 func (c *Chat) ProcessNameList(printNames bool) {
 	uList, err := c.client.User.GetByName(c.chatterNames)
-	if(err != nil) {
+	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	for _, u :=range uList {
+	for _, u := range uList {
 		c.activeChat[u.ID] = u.Name
 
-		v, ok := c.client.Viewers[u.ID]
-		if(!ok) {
-			c.client.Viewers[u.ID] := &Viewer{
+		_, ok := c.client.Viewers[u.ID]
+		if !ok {
+			c.client.Viewers[u.ID] = &Viewer{
 				TwitchID: u.ID,
-				User: &u,
-				client:c.client, 
+				User:     &u,
+				client:   c.client,
 			}
 		}
 	}
-	
+
 	if printNames {
 		nickformated := ""
-			nickLength := 15
-			
-			for i, v := range c.chatterNames {
+		nickLength := 15
 
-				vStr := string(v)
-		
-				if len(vStr) > nickLength {
-					vStr = vStr[0:nickLength]
-				}
-				for len(vStr) < nickLength {
-					vStr += " "
-				}
-				if i > 0 && (i%4) == 0 {
-					nickformated += "\n\t" + vStr
-				} else {
-					nickformated += "\t" + vStr
-				}
+		for i, v := range c.chatterNames {
+
+			vStr := string(v)
+
+			if len(vStr) > nickLength {
+				vStr = vStr[0:nickLength]
 			}
-			c.log.Printf("--- Names ---\n%s\n-------------", nickformated)		
+			for len(vStr) < nickLength {
+				vStr += " "
+			}
+			if i > 0 && (i%4) == 0 {
+				nickformated += "\n\t" + vStr
+			} else {
+				nickformated += "\t" + vStr
+			}
+		}
+		c.log.Printf("--- Names ---\n%s\n-------------", nickformated)
 	}
 }
 
@@ -337,9 +337,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	// Name List
 	case IrcReplyNamreply:
-	for _, in := range strings.Split(m.Trailing(), " ") {
-		c.chatterNames = append(c.chatterNames, ircNick(in))
-	}
+		for _, in := range strings.Split(m.Trailing(), " ") {
+			c.chatterNames = append(c.chatterNames, ircNick(in))
+		}
 
 	case IrcReplyEndofnames:
 		c.ProcessNameList(true)
@@ -357,39 +357,38 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 	case IrcCmdJoin: // User Joined Channel
 		c.log.Printf("JOIN %s", m.Name)
 		nick := ircNick(m.Name)
-		v := c.client.FindViewerIdByName(nick)
-		if(v != nil) {
-			c.activeChat[v.TwitchID] = v.Nick()
+		v := c.client.FindViewerIDByName(nick)
+		if v != nil {
+			c.activeChat[v.TwitchID] = v.getNick()
 			return
 		}
-			uList, err := c.client.User.GetByName([]ircNick{nick})
-			if(err != nil) {
-				log.Printf("Unable to find %s", nick)
-				return
-			}
-			
+		uList, err := c.client.User.GetByName([]ircNick{nick})
+		if err != nil {
+			log.Printf("Unable to find %s", nick)
+			return
+		}
+
 		c.activeChat[uList[0].ID] = nick
 
 	case IrcCmdPart: // User Parted Channel
 		c.log.Printf("PART %s", m.Name)
 		nick := ircNick(m.Name)
-		v := c.client.FindViewerIdByName(nick)
-		if(v != nil) {
+		v := c.client.FindViewerIDByName(nick)
+		if v != nil {
 
-		delete(c.activeChat, v.TwitchID)
+			delete(c.activeChat, v.TwitchID)
 
-			return 
+			return
 		}
 
-			uList, err := c.client.User.GetByName([]ircNick{nick})
-			if(err != nil) {
-				log.Printf("Unable to find %s", nick)
-				return
-			}
-			
+		uList, err := c.client.User.GetByName([]ircNick{nick})
+		if err != nil {
+			log.Printf("Unable to find %s", nick)
+			return
+		}
+
 		c.activeChat[uList[0].ID] = nick
 
-		
 	case TwitchCmdClearChat:
 		log.Printf("IRC NOT[%s] \t %+v", m.Command, m)
 
@@ -483,8 +482,8 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				log.Print("Bits error -", m, err)
 			} else {
 				v.bits += bVal
-				c.log.Printf("BITS %d \t %s: \t%s", 
-				bVal, v.NameWithBadge(), m.Trailing())
+				c.log.Printf("BITS %d \t %s: \t%s",
+					bVal, v.NameWithBadge(), m.Trailing())
 			}
 
 		} else {
@@ -503,9 +502,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 func (vwr *chatter) NameWithBadge() string {
 	r := ""
-	for n,v := vwr.badges {
-		r += n[0] + v
- 	}
+	for n, v := range vwr.badges {
+		r += fmt.Sprintf("%s%d", n[0], v)
+	}
 	r += string(vwr.nick)
 	return r
 }
