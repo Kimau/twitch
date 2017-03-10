@@ -335,25 +335,36 @@ const (
 
 // Twitch Tags
 const (
-	TwitchTagUserID            = "id"
+	TwitchTagBanReason         = "ban-reason"
+	TwitchTagBits              = "bits"
+	TwitchTagLogin             = "login"
+	TwitchTagMsgID             = "msg-id"
+	TwitchTagMsgParamMonths    = "msg-param-months"
+	TwitchTagMsgEmotes         = "emotes"
+	TwitchTagRoomEmote         = "emote-only"
+	TwitchTagRoomFollowersOnly = "followers-only"
+	TwitchTagRoomID            = "room-id"
+	TwitchTagRoomLang          = "broadcaster-lang"
+	TwitchTagRoomR9K           = "r9k"
+	TwitchTagRoomSlow          = "slow"
+	TwitchTagRoomSubOnly       = "subs-only"
+	TwitchTagSystemMsg         = "system-msg"
+	TwitchTagUniqueID          = "id"
 	TwitchTagUserBadge         = "badges"
 	TwitchTagUserColor         = "color"
 	TwitchTagUserDisplayName   = "display-name"
 	TwitchTagUserEmoteSet      = "emote-sets"
+	TwitchTagUserID            = "user-id"
 	TwitchTagUserMod           = "mod"
 	TwitchTagUserSub           = "subscriber"
-	TwitchTagUserType          = "user-type"
 	TwitchTagUserTurbo         = "turbo"
-	TwitchTagRoomID            = "room-id"
-	TwitchTagRoomFollowersOnly = "followers-only"
-	TwitchTagRoomR9K           = "r9k"
-	TwitchTagRoomSlow          = "slow"
-	TwitchTagRoomSubOnly       = "subs-only"
-	TwitchTagRoomLang          = "broadcaster-lang"
-	TwitchTagRoomEmote         = "emote-only"
-	TwitchTagBits              = "bits"
-	TwitchTagMsgID             = "msg-id"
-	TwitchTagBanReason         = "ban-reason"
+	TwitchTagUserType          = "user-type"
+)
+
+// Twitch User Notice Msg Id
+const (
+	TwitchUserNoticeReSub   = "resub"
+	TwitchUserNoticeCharity = "charity"
 )
 
 // Twitch Badges

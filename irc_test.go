@@ -43,6 +43,7 @@ var (
 		":tmi.twitch.tv CLEARCHAT #kimau :ronni",
 		"@ban-reason=Follow\\sthe\\srules :tmi.twitch.tv CLEARCHAT #kimau :ronni",
 		"@badges=staff/1,broadcaster/1,turbo/1;color=#008000;display-name=ronni;emotes=;mod=0;msg-id=resub;msg-param-months=6;room-id=1337;subscriber=1;system-msg=ronni\\shas\\ssubscribed\\sfor\\s6\\smonths!;login=ronni;turbo=1;user-id=1337;user-type=staff :tmi.twitch.tv USERNOTICE #dallas :Great stream -- keep it up!",
+		"@badges=global_mod/1,turbo/1;color=#0D4200;display-name=dallas;emotes=25:0-4,12-16/1902:6-10;mod=0;room-id=1337;subscriber=0;turbo=1;user-id=1337;user-type=global_mod :ronni!ronni@ronni.tmi.twitch.tv PRIVMSG #dallas :Kappa Keepo Kappa",
 	}
 )
 
@@ -181,4 +182,39 @@ func TestIrcMessage(t *testing.T) {
 	lastM = ""
 
 	t.Log("\n_________________________\n", &chat.logBuffer)
+}
+
+func TestEmoteTagProcessor(t *testing.T) {
+
+	emoteTagTest := []struct {
+		input irc.TagValue
+		res   EmoteReplaceListFromBack
+		err   error
+	}{
+		{"", EmoteReplaceListFromBack{}, nil},
+		{"25:0-4,12-16/1902:6-10", EmoteReplaceListFromBack{
+			{25, 0, 4}, {1902, 6, 10}, {25, 12, 16},
+		}, nil},
+	}
+
+	for i, ett := range emoteTagTest {
+		x, err := emoteTagToList(ett.input)
+		if len(x) != len(ett.res) {
+			t.Logf("%d TestEmoteTagProcessor RES FAIL \n%v\n!=\n%v", i, x, ett.res)
+			t.Fail()
+		}
+
+		for subI := 0; subI < len(x); subI++ {
+			if x[subI] != ett.res[subI] {
+				t.Logf("%d %d TestEmoteTagProcessor RES FAIL \n%v\n!=\n%v", i, subI, x[subI], ett.res[subI])
+				t.Fail()
+			}
+		}
+
+		if err != ett.err {
+			t.Logf("%d TestEmoteTagProcessor ERROR FAIL \n%v\n!=\n%v", i, err, ett.err)
+			t.Fail()
+		}
+	}
+
 }

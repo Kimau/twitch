@@ -13,7 +13,7 @@ import (
 type chatter struct {
 	nick        IrcNick
 	displayName string
-	emoteSets   map[int]int
+	emoteSets   []EmoteSet
 	bits        int
 
 	mod      bool
@@ -33,8 +33,43 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 	for tagName, tagVal := range m.Tags {
 		switch tagName {
 
+		// ----- Do Nothing -----
+		case TwitchTagUniqueID:
+		case TwitchTagRoomID:
+		case TwitchTagMsgParamMonths: // Do nothing by itself
+		case TwitchTagBits: // Do nothing with bits value getting from Badge
+		case TwitchTagSystemMsg:
+		case TwitchTagMsgEmotes:
+		// ----- End of Do Nothing -----
+
+		case TwitchTagMsgID:
+			switch tagVal {
+			case TwitchUserNoticeReSub:
+				months, ok := m.Tags[TwitchTagMsgParamMonths]
+				if !ok {
+					log.Println("Error processing Resub: Missing Months Tag")
+					continue
+				}
+				mVal, err := strconv.Atoi(string(months))
+				if err != nil {
+					log.Println("Error processing Resub:", err)
+					continue
+				}
+
+				cu.sub = mVal
+
+			case TwitchUserNoticeCharity:
+			// TODO :: Handle Charity Bits
+			default:
+				log.Printf("We didn't handle [%s:%s]", tagName, tagVal)
+
+			}
+
 		case TwitchTagUserID:
 			cu.id = ID(tagVal)
+
+		case TwitchTagLogin:
+			cu.nick = IrcNick(tagVal)
 
 		case TwitchTagUserTurbo:
 			if cu.badges == nil {
@@ -53,11 +88,15 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 				} else {
 					iVal = testVal
 				}
+				if t[0] == TwitchBadgeBits {
+					cu.bits = iVal
+				}
 				cu.badges[t[0]] = iVal
 			}
 
 		case TwitchTagUserColor:
 			cu.color = string(tagVal)
+
 		case TwitchTagUserDisplayName:
 			cu.displayName = string(tagVal)
 			if cu.nick == "" {
@@ -65,14 +104,9 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 			}
 		case TwitchTagUserEmoteSet:
 			emoteStrings := strings.Split(string(tagVal), ",")
-			cu.emoteSets = make(map[int]int)
+			cu.emoteSets = []EmoteSet{}
 			for _, v := range emoteStrings {
-				vInt, err := strconv.Atoi(v)
-				if err != nil {
-					log.Println(tagName, tagVal, err)
-				} else {
-					cu.emoteSets[vInt] = 1
-				}
+				cu.emoteSets = append(cu.emoteSets, EmoteSet(v))
 			}
 		case TwitchTagUserMod:
 			intVal, err := strconv.Atoi(string(tagVal))
@@ -81,15 +115,24 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 			} else {
 				cu.mod = (intVal > 0)
 			}
+
 		case TwitchTagUserSub:
 			intVal, err := strconv.Atoi(string(tagVal))
 			if err != nil {
 				log.Println(tagName, tagVal, err)
 			} else {
-				cu.sub = intVal
+				if intVal < 1 || intVal > cu.sub {
+					cu.sub = intVal
+				}
+
 			}
+
 		case TwitchTagUserType:
 			cu.userType = string(tagVal)
+
+		default:
+			fmt.Printf("Didn't deal with tag [%s:%s]\n", tagName, tagVal)
+
 		}
 	}
 

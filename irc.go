@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"sort"
+
 	"github.com/go-irc/irc"
 	"golang.org/x/time/rate"
 )
@@ -294,6 +296,53 @@ func (c *Chat) processNameList() {
 	}
 }
 
+func emoteTagToList(val irc.TagValue) (EmoteReplaceListFromBack, error) {
+
+	if len(val) <= 0 {
+		return EmoteReplaceListFromBack{}, nil
+	}
+
+	erList := EmoteReplaceListFromBack{}
+	emoteGroup := strings.Split(string(val), "/")
+
+	for _, eg := range emoteGroup {
+		egs := strings.Split(eg, ":")
+		egID, err := StringToEmoteID(egs[0])
+		if err != nil {
+			return nil, fmt.Errorf("Unable to StringToEmoteID %s - %s", egs[0], err.Error())
+		}
+
+		egReplaceSets := strings.Split(egs[1], ",")
+		for _, rs := range egReplaceSets {
+			if len(rs) < 2 {
+				return nil, fmt.Errorf("Unable to Split %s - %s", rs, err.Error())
+			}
+			rsSplit := strings.Split(rs, "-")
+
+			rsStart := rsSplit[0]
+			rsEnd := rsSplit[1]
+			rsStartVal, err := strconv.Atoi(rsStart)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to conv %s - %s", rsStart, err.Error())
+			}
+			rsEndVal, err := strconv.Atoi(rsEnd)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to conv %s - %s", rsEnd, err.Error())
+			}
+
+			erList = append(erList, EmoteReplace{
+				ID:    egID,
+				Start: rsStartVal,
+				End:   rsEndVal,
+			})
+		}
+	}
+
+	sort.Sort(erList)
+	return erList, nil
+
+}
+
 // Handle - IRC Message
 func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 	printOut, ok := ignoreMsgCmd[m.Command]
@@ -424,7 +473,10 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 	case TwitchCmdUserNotice:
-		printDebugTag(m)
+		cu := &chatter{}
+		cu.UpdateChatterFromTags(m)
+		c.viewers.GetViewerFromChatter(cu)
+		c.Logf("* %s", m.Tags[TwitchTagSystemMsg])
 
 	case TwitchCmdUserState:
 		cu := &chatter{}
@@ -457,21 +509,37 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 		v.Chatter.UpdateChatterFromTags(m)
 
-		bits, ok := m.Tags[TwitchTagBits]
+		finalText := v.Chatter.NameWithBadge()
 
+		// Handle Bits
+		bits, ok := m.Tags[TwitchTagBits]
 		if ok {
 			bVal, err := strconv.Atoi(string(bits))
 			if err != nil {
 				log.Print("Bits error -", m, err)
 			} else {
-				v.Chatter.bits += bVal
-				c.Logf("%-14s: [BITS %d] %s",
+				finalText += fmt.Sprintf("[BITS %d]", bVal)
+				c.Logf("%-14s [BITS %d]: %s",
 					v.Chatter.NameWithBadge(), bVal, m.Trailing())
 			}
-
-		} else {
-			c.Logf("%-14s: %s", v.Chatter.NameWithBadge(), m.Trailing())
 		}
+
+		// Padding before
+		finalText = fmt.Sprintf("%-14s", finalText)
+
+		// Handle Emotes
+		emoteList, ok := m.Tags[TwitchTagMsgEmotes]
+		if ok {
+			el, err := emoteTagToList(emoteList)
+			if err != nil {
+				log.Printf("Unable to parse Emote Tag [%s]\n%s", emoteList, err)
+			} else {
+				finalText += fmt.Sprintf("{%s}", el)
+			}
+		}
+
+		// Add Text
+		finalText += ":" + m.Trailing()
 
 	case IrcCmdNotice:
 		msgID, ok := m.Tags[TwitchTagMsgID]
