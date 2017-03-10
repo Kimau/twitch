@@ -1,6 +1,9 @@
 package twitch
 
-import "log"
+import (
+	"fmt"
+	"log"
+)
 
 // Viewer is basic Viewer
 type Viewer struct {
@@ -13,22 +16,92 @@ type Viewer struct {
 	client *Client
 }
 
-// FindViewerIDByName - Attempts to find viewer by ID
-func (client *Client) FindViewerIDByName(name IrcNick) *Viewer {
+// GetViewerFromChatter - Get Viewer from Chatter
+func (ah *Client) GetViewerFromChatter(cu *chatter) *Viewer {
+	if cu.id != "" {
+		v := ah.GetViewer(cu.id)
+		v.Chatter = cu
+		return v
+	} else if cu.nick != "" {
+		v := ah.FindViewer(cu.nick)
+		v.Chatter = cu
+		return v
+	} else if cu.displayName != "" {
+		v := ah.FindViewer(IrcNick(cu.displayName))
+		v.Chatter = cu
+		return v
+	}
 
-	for _, v := range client.Viewers {
-		if v.User != nil && v.User.Name == name {
-			return v
+	fmt.Printf("GetViewerFromChatter ERROR \n %#v", cu)
+	return nil
+}
+
+// GetViewer - Get Viewer by ID
+func (ah *Client) GetViewer(twitchID ID) *Viewer {
+	v, ok := ah.Viewers[twitchID]
+	if !ok {
+		u, err := ah.User.Get(twitchID)
+		if err != nil {
+			log.Printf("Unable to get User %s\n%s", twitchID, err.Error())
+			return nil
 		}
-		if v.Chatter != nil && v.Chatter.nick == name {
-			return v
+
+		ah.Viewers[twitchID] = &Viewer{
+			TwitchID: twitchID,
+			User:     u,
 		}
-		if v.Auth != nil && v.Auth.token != nil && v.Auth.token.Username == name {
+	}
+
+	return v
+}
+
+// FindViewer -
+func (ah *Client) FindViewer(nick IrcNick) *Viewer {
+	for _, v := range ah.Viewers {
+		if v.User.Name == nick {
 			return v
 		}
 	}
 
-	return nil
+	userList, err := ah.User.GetByName([]IrcNick{nick})
+	if err != nil {
+		log.Printf("Error in finding %s\n%s", nick, err.Error())
+		return nil
+	}
+
+	return &Viewer{
+		TwitchID: userList[0].ID,
+		User:     &userList[0],
+	}
+}
+
+// UpdateViewers - Update Viewers from list of Names
+func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
+	userList, err := ah.User.GetByName(nickList)
+	if err != nil {
+		log.Printf("Error in userList \n---\n%s\n---\n%s",
+			JoinNicks(nickList, 4, 18),
+			err.Error())
+		return nil
+	}
+
+	vList := []*Viewer{}
+	for _, u := range userList {
+		v, ok := ah.Viewers[u.ID]
+		if !ok {
+			v = &Viewer{
+				TwitchID: u.ID,
+				User:     &u,
+			}
+			ah.Viewers[u.ID] = v
+		} else {
+			// Update User Data
+			v.User = &u
+		}
+		vList = append(vList, v)
+	}
+
+	return vList
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
@@ -36,8 +109,8 @@ func (vw *Viewer) Get(path string, jsonStruct interface{}) (string, error) {
 	return vw.client.Get(vw.Auth, path, jsonStruct)
 }
 
-// getNick - Returns short username of current UserAuth
-func (vw *Viewer) getNick() IrcNick {
+// GetNick - Returns short username of current UserAuth
+func (vw *Viewer) GetNick() IrcNick {
 	if vw.User != nil {
 		return vw.User.Name
 	}

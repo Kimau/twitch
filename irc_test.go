@@ -1,6 +1,8 @@
 package twitch
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-irc/irc"
@@ -35,7 +37,8 @@ var (
 		"@msg-id=host_off :tmi.twitch.tv NOTICE #kimau :Exited host mode.",
 		"@msg-id=unrecognized_cmd :tmi.twitch.tv NOTICE #kimau :Unrecognized command: /do",
 		"@color=#0D4200;display-name=dallas;emote-sets=0,33,50,237,793,2126,3517,4578,5569,9400,10337,12239;turbo=0;user-id=1337;user-type=admin :tmi.twitch.tv GLOBALUSERSTATE",
-		"@badges=global_mod/1,turbo/1;color=#0D4200;display-name=dallas;emotes=25:0-4,12-16/1902:6-10;mod=0;room-id=1337;subscriber=0;turbo=1;user-id=1337;user-type=global_mod :ronni!ronni@ronni.tmi.twitch.tv PRIVMSG #dallas :Kappa Keepo Kappa",
+		":ronni!ronni@ronni.tmi.twitch.tv PRIVMSG #dallas :Kappa Keepo Kappa",
+		":reallylongname!reallylongname@ronni.tmi.twitch.tv PRIVMSG #dallas :Annoyingly long message for you to parse Professor X was in a wheelchair in “Logan,” which means Sir Patrick Stewart spent half the movie being carried up stairs and into bathrooms by Hugh Jackman.",
 		"@badges=staff/1,bits/1000;bits=100;color=;display-name=dallas;emotes=;id=b34ccfc7-4977-403a-8a94-33c6bac34fb8;mod=0;room-id=1337;subscriber=0;turbo=1;user-id=1337;user-type=staff :ronni!ronni@ronni.tmi.twitch.tv PRIVMSG #dallas :cheer100",
 		":tmi.twitch.tv CLEARCHAT #kimau :ronni",
 		"@ban-reason=Follow\\sthe\\srules :tmi.twitch.tv CLEARCHAT #kimau :ronni",
@@ -111,6 +114,27 @@ func (dvp *DummyViewProvider) UpdateViewers(nickList []IrcNick) []*Viewer {
 	return vList
 }
 
+// GetViewerFromChatter - Get Viewer from Chatter
+func (dvp *DummyViewProvider) GetViewerFromChatter(cu *chatter) *Viewer {
+	if cu.id != "" {
+		v := dvp.GetViewer(cu.id)
+		v.Chatter = cu
+		return v
+	} else if cu.nick != "" {
+		v := dvp.FindViewer(cu.nick)
+		v.Chatter = cu
+		return v
+	} else if cu.displayName != "" {
+		v := dvp.FindViewer(IrcNick(cu.displayName))
+		v.Chatter = cu
+		return v
+	}
+
+	fmt.Printf("GetViewerFromChatter ERROR \n %s",
+		strings.Replace(fmt.Sprintf("%#v", cu), ",", ",\n", -1))
+	return nil
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 func TestIrcMessage(t *testing.T) {
@@ -127,23 +151,34 @@ func TestIrcMessage(t *testing.T) {
 			Name: "Full Name",
 		},
 		viewers: &DummyViewProvider{},
+		InRoom:  make(map[IrcNick]*Viewer),
 	}
 
-	chat.SetupLogWriter(&chat.msgLog)
-	chat.log.Println("+------------ New Log ------------+")
+	chat.SetupLogWriter(&chat.logBuffer)
+	chat.msgLogger.Println("+------------ New Log ------------+")
 	chat.config.Handler = chat
 
 	ircClient := irc.NewClient(&DummyWriteRead{}, chat.config)
 
+	// Last M
+	lastM := msgList[0]
+	defer func() {
+		if lastM != "" {
+			t.Logf("PANIC\n_____\n%s\n________", lastM)
+		}
+	}()
+
 	for _, v := range msgList {
+		lastM = v
 		m, err := irc.ParseMessage(v)
 		if err != nil {
-			t.Log(err)
+			t.Logf("FAILED TO PROCESS\n%s\n%s", m, err)
 			t.Fail()
 		}
 
 		chat.Handle(ircClient, m)
 	}
+	lastM = ""
 
-	t.Log(&chat.msgLog)
+	t.Log("\n_________________________\n", &chat.logBuffer)
 }

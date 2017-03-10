@@ -353,6 +353,7 @@ const (
 	TwitchTagRoomEmote         = "emote-only"
 	TwitchTagBits              = "bits"
 	TwitchTagMsgID             = "msg-id"
+	TwitchTagBanReason         = "ban-reason"
 )
 
 // Twitch Badges
@@ -361,5 +362,7 @@ const (
 	TwitchBadgeTurbo       = "turbo"
 	TwitchBadgeSub         = "sub"
 	TwitchBadgeMod         = "mod"
+	TwitchBadgeGlobalMod   = "global_mod"
 	TwitchBadgeBroadcaster = "broadcaster"
+	TwitchBadgeBits        = "bits"
 )

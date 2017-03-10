@@ -170,7 +170,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 
 		ah.Viewers[tID] = v
 		http.SetCookie(w, v.Auth.createSessionCookie())
-		fmt.Fprintf(w, "Logged in %s #%s", v.getNick(), tID)
+		fmt.Fprintf(w, "Logged in %s #%s", v.GetNick(), tID)
 
 		go v.UpdateUser()
 	}

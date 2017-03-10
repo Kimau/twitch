@@ -149,74 +149,6 @@ func (ah *Client) GetNick() IrcNick {
 	return ""
 }
 
-// GetViewer - Get Viewer by ID
-func (ah *Client) GetViewer(twitchID ID) *Viewer {
-	v, ok := ah.Viewers[twitchID]
-	if !ok {
-		u, err := ah.User.Get(twitchID)
-		if err != nil {
-			log.Printf("Unable to get User %s\n%s", twitchID, err.Error())
-			return nil
-		}
-
-		ah.Viewers[twitchID] = &Viewer{
-			TwitchID: twitchID,
-			User:     u,
-		}
-	}
-
-	return v
-}
-
-// FindViewer -
-func (ah *Client) FindViewer(nick IrcNick) *Viewer {
-	for _, v := range ah.Viewers {
-		if v.User.Name == nick {
-			return v
-		}
-	}
-
-	userList, err := ah.User.GetByName([]IrcNick{nick})
-	if err != nil {
-		log.Printf("Error in finding %s\n%s", nick, err.Error())
-		return nil
-	}
-
-	return &Viewer{
-		TwitchID: userList[0].ID,
-		User:     &userList[0],
-	}
-}
-
-// UpdateViewers -
-func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
-	userList, err := ah.User.GetByName(nickList)
-	if err != nil {
-		log.Printf("Error in userList \n---\n%s\n---\n%s",
-			JoinNicks(nickList, 4, 18),
-			err.Error())
-		return nil
-	}
-
-	vList := []*Viewer{}
-	for _, u := range userList {
-		v, ok := ah.Viewers[u.ID]
-		if !ok {
-			v = &Viewer{
-				TwitchID: u.ID,
-				User:     &u,
-			}
-			ah.Viewers[u.ID] = v
-		} else {
-			// Update User Data
-			v.User = &u
-		}
-		vList = append(vList, v)
-	}
-
-	return vList
-}
-
 // AdminHTTP for backoffice requests
 func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get Relative Path
@@ -299,7 +231,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	http.SetCookie(w, u.Auth.sessionCookie)
-	fmt.Fprintf(w, "You are logged in %s", u.getNick())
+	fmt.Fprintf(w, "You are logged in %s", u.GetNick())
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct

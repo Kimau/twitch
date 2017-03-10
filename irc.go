@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	limitIrcMessageNum  = 20
-	limitIrcMessageTime = time.Second * 30
+	limitIrcMessageNum   = 20
+	limitIrcMessageTime  = time.Second * 30
+	defaultNickPadLength = 14
 )
 
 // needs to bind to real address for VPN
@@ -56,6 +57,7 @@ type viewerProvider interface {
 	GetViewer(ID) *Viewer
 	FindViewer(IrcNick) *Viewer
 	UpdateViewers([]IrcNick) []*Viewer
+	GetViewerFromChatter(*chatter) *Viewer
 }
 
 // Chat - IRC Chat interface
@@ -72,8 +74,8 @@ type Chat struct {
 	messageOfTheDay []string
 	nameReplyList   []IrcNick
 
-	log    *log.Logger
-	msgLog bytes.Buffer
+	msgLogger *log.Logger
+	logBuffer bytes.Buffer
 
 	viewers viewerProvider
 	irc     *irc.Client
@@ -104,25 +106,35 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider) (*Chat, error) {
 		viewers: vp,
 	}
 
-	chat.SetupLogWriter(&chat.msgLog)
-	chat.log.Println("+------------ New Log ------------+")
+	chat.SetupLogWriter(&chat.logBuffer)
+	chat.Log("+------------ New Log ------------+")
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
 
 	return chat, nil
 }
 
+// Log - Log to internal message logger
+func (c *Chat) Log(s string) {
+	c.msgLogger.Print(s)
+}
+
+// Logf - FMT interface
+func (c *Chat) Logf(s string, v ...interface{}) {
+	c.msgLogger.Printf(s, v...)
+}
+
 // SetupLogWriter - Set where the log is written to
 func (c *Chat) SetupLogWriter(newTarget io.Writer) {
-	c.log = log.New(newTarget, "IRC: ", log.Ltime)
-	if c.log == nil {
+	c.msgLogger = log.New(newTarget, "IRC: ", log.Ltime)
+	if c.msgLogger == nil {
 		log.Fatalln("Log shouldn't be null")
 	}
 }
 
 // GetLog - Getting Chat Log
 func (c *Chat) GetLog() *bytes.Buffer {
-	return &c.msgLog
+	return &c.logBuffer
 }
 
 // StartRunLoop - Start Run Loop
@@ -188,19 +200,66 @@ func (c *Chat) nowHosting(target *Viewer) {
 	c.mode.hosting = target
 
 	if target == nil {
-		c.log.Printf("* No longer hosting.")
+		c.Logf("* No longer hosting.")
 	} else {
-		c.log.Printf("* Now Hosting %s", target.User.DisplayName)
+		c.Logf("* Now Hosting %s", target.User.DisplayName)
+	}
+}
+
+func (c *Chat) clearChat(m *irc.Message) {
+	// TODO :: Check it's this channel
+
+	nickToClear := m.Trailing()
+
+	newMsg := bytes.Buffer{}
+	for fullS, e := c.logBuffer.ReadString('\n'); e == nil; fullS, e = c.logBuffer.ReadString('\n') {
+		if !strings.HasPrefix(fullS, "IRC:") {
+			fmt.Fprint(&newMsg, fullS)
+			continue
+		}
+
+		t := fullS[:14]
+		s := fullS[14:]
+
+		switch s[0:1] {
+		case "*":
+			fmt.Fprint(&newMsg, fullS)
+		case "_":
+			fmt.Fprint(&newMsg, fullS)
+		default:
+			if len(s) < 4 {
+				fmt.Fprint(&newMsg, fullS)
+				continue
+			}
+
+			nick := s[2 : strings.Index(s[3:], " ")+3]
+			if nick == nickToClear {
+				fmt.Fprintf(&newMsg, "%s_%s", t, s)
+			} else {
+				fmt.Fprint(&newMsg, fullS)
+			}
+		}
+	}
+
+	c.logBuffer.Reset()
+	c.logBuffer = newMsg
+
+	// Log Ban Reason
+	r, ok := m.Tags[TwitchTagBanReason]
+	if ok {
+		c.Logf("_ Cleared %s from chat: %s", nickToClear, r)
+	} else {
+		c.Logf("_ Cleared %s from chat", nickToClear)
 	}
 }
 
 func printDebugTag(m *irc.Message) {
 	tags := ""
 	for k, v := range m.Tags {
-		tags += fmt.Sprintf("%s:\t %s\n", k, v)
+		tags += fmt.Sprintf("|%s:\t %s|\n", k, v)
 	}
 
-	log.Printf("IRC NOT DEBUG[%s] %s \n%s \n%s", m.Command, m.Trailing(), strings.Join(m.Params, " -\t "), tags)
+	log.Printf("IRC NOT DEBUG [%s]\n%s\n[%s]\n%s", m.Command, m.Trailing(), strings.Join(m.Params, " \t|"), tags)
 
 }
 
@@ -230,7 +289,7 @@ func (c *Chat) processNameList() {
 	vList := c.viewers.UpdateViewers(c.nameReplyList)
 
 	for _, v := range vList {
-		nick := v.getNick()
+		nick := v.GetNick()
 		c.InRoom[nick] = v
 	}
 }
@@ -240,14 +299,14 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 	printOut, ok := ignoreMsgCmd[m.Command]
 	if ok {
 		if printOut {
-			c.log.Printf("IRC [%s] \t %s", m.Command, m.Trailing())
+			c.Logf("IRC [%s] \t %s", m.Command, m.Trailing())
 		}
 		return
 	}
 
 	switch m.Command {
 	case IrcReplyWelcome: // 001 is a welcome event, so we join channels there
-		c.log.Println("Respond to Welcome")
+		c.Log("Respond to Welcome")
 		c.respondToWelcome(m)
 
 		// Message of the Day
@@ -258,7 +317,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.messageOfTheDay = append(c.messageOfTheDay, m.Trailing())
 
 	case IrcReplyEndofmotd:
-		c.log.Printf(
+		c.Logf(
 			"--- Message of the Day ---\n\t%s \n-----------------------------",
 			strings.Join(c.messageOfTheDay, "\n\t"))
 		// End of Message of the Day
@@ -274,8 +333,8 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case IrcReplyEndofnames:
 		c.processNameList()
-		nickformated := JoinNicks(c.nameReplyList, 4, 18)
-		c.log.Printf("--- Names ---\n%s\n-------------", nickformated)
+		nickformated := JoinNicks(c.nameReplyList, 4, defaultNickPadLength)
+		c.Logf("--- Names ---\n%s\n-------------", nickformated)
 		c.nameReplyList = nil
 		// End of Name List
 
@@ -289,25 +348,28 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			m.Trailing())
 
 	case IrcCmdJoin: // User Joined Channel
-		c.log.Printf("JOIN %s", m.Name)
+		c.Logf("* Join %s", m.Name)
 		nick := IrcNick(m.Name)
 
 		v := c.viewers.FindViewer(nick)
 		c.InRoom[nick] = v
 
 	case IrcCmdPart: // User Parted Channel
-		c.log.Printf("PART %s", m.Name)
+		c.Logf("* Part %s", m.Name)
 		delete(c.InRoom, IrcNick(m.Name))
 
 	case TwitchCmdClearChat:
-		printDebugTag(m)
+		c.clearChat(m)
 
 	case TwitchCmdGlobalUserState:
-		printDebugTag(m)
+		cu := &chatter{}
+		cu.UpdateChatterFromTags(m)
+		v := c.viewers.GetViewerFromChatter(cu)
+		c.Logf("* Global User State for %s", v.GetNick())
 
 	case TwitchCmdRoomState:
 		chatChanName := m.Trailing()
-		c.log.Printf("* Room State updated %s", chatChanName)
+		c.Logf("* Room State updated %s", chatChanName)
 
 		c.mode = &chatMode{}
 		for tagName, tagVal := range m.Tags {
@@ -316,7 +378,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.followersOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.log.Println(tagName, tagVal, err)
+					c.Logf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.followersOnly = true
 				}
@@ -325,7 +387,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.r9k = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.log.Println(tagName, tagVal, err)
+					c.Logf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.r9k = true
 				}
@@ -333,7 +395,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.slowMode = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.log.Println(tagName, tagVal, err)
+					c.Logf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.slowMode = true
 				}
@@ -341,7 +403,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.subsOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.log.Println(tagName, tagVal, err)
+					c.Logf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.subsOnly = true
 				}
@@ -353,7 +415,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.emoteOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.log.Println(tagName, tagVal, err)
+					c.Logf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.emoteOnly = true
 				}
@@ -365,14 +427,11 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		printDebugTag(m)
 
 	case TwitchCmdUserState:
-		chatChanName := m.Trailing()
-		if c.self == nil {
-			c.self = &chatter{
-				nick: IrcNick(c.config.Nick),
-			}
-		}
-		c.self.UpdateChatterFromTags(m)
-		c.log.Printf("* User State updated from %s in %s", c.self.nick, chatChanName)
+		cu := &chatter{}
+		cu.UpdateChatterFromTags(m)
+		v := c.viewers.GetViewerFromChatter(cu)
+		c.InRoom[v.GetNick()] = v
+		c.Logf("* User State updated from %s in %s", v.GetNick(), m.Trailing())
 
 	case TwitchCmdHostTarget:
 		match := regexHostName.FindStringSubmatch(m.Trailing())
@@ -393,7 +452,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		v := c.viewers.FindViewer(IrcNick(m.Name))
 		if v.Chatter == nil {
 			v.Chatter = &chatter{
-				nick: v.getNick(),
+				nick: v.GetNick(),
 			}
 		}
 		v.Chatter.UpdateChatterFromTags(m)
@@ -406,12 +465,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				log.Print("Bits error -", m, err)
 			} else {
 				v.Chatter.bits += bVal
-				c.log.Printf("BITS %d \t %s: \t%s",
-					bVal, v.Chatter.NameWithBadge(), m.Trailing())
+				c.Logf("%-14s: [BITS %d] %s",
+					v.Chatter.NameWithBadge(), bVal, m.Trailing())
 			}
 
 		} else {
-			c.log.Printf("%s: \t%s", v.Chatter.NameWithBadge(), m.Trailing())
+			c.Logf("%-14s: %s", v.Chatter.NameWithBadge(), m.Trailing())
 		}
 
 	case IrcCmdNotice:
@@ -430,45 +489,45 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 		case TwitchMsgR9kOff:
 			c.mode.r9k = false
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 		case TwitchMsgR9kOn:
 			c.mode.r9k = true
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 		case TwitchMsgSlowOff:
 			c.mode.slowMode = false
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 		case TwitchMsgSlowOn:
 			c.mode.slowMode = true
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 		case TwitchMsgSubsOff:
 			c.mode.subsOnly = false
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 		case TwitchMsgSubsOn:
 			c.mode.subsOnly = true
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 
 		case TwitchMsgEmoteOnlyOff:
 			c.mode.emoteOnly = false
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 		case TwitchMsgEmoteOnlyOn:
 			c.mode.emoteOnly = true
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 
 		case TwitchMsgAlreadyEmoteOnlyOff:
-			c.log.Println("* MODE ALREADY SET: " + m.Trailing())
+			c.Log("* MODE ALREADY SET: " + m.Trailing())
 		case TwitchMsgAlreadyEmoteOnlyOn:
-			c.log.Println("* MODE ALREADY SET: " + m.Trailing())
+			c.Log("* MODE ALREADY SET: " + m.Trailing())
 		case TwitchMsgAlreadyR9kOff:
-			c.log.Println("* MODE ALREADY SET: " + m.Trailing())
+			c.Log("* MODE ALREADY SET: " + m.Trailing())
 		case TwitchMsgAlreadyR9kOn:
-			c.log.Println("* MODE ALREADY SET: " + m.Trailing())
+			c.Log("* MODE ALREADY SET: " + m.Trailing())
 		case TwitchMsgAlreadySubsOff:
-			c.log.Println("* MODE ALREADY SET: " + m.Trailing())
+			c.Log("* MODE ALREADY SET: " + m.Trailing())
 		case TwitchMsgAlreadySubsOn:
-			c.log.Println("* MODE ALREADY SET: " + m.Trailing())
+			c.Log("* MODE ALREADY SET: " + m.Trailing())
 
 		case TwitchMsgUnrecognizedCmd:
-			c.log.Println("* " + m.Trailing())
+			c.Log("* " + m.Trailing())
 
 		/*
 			case 		 TwitchMsgAlreadyBanned      :
