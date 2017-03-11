@@ -141,12 +141,13 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 
 func (cu *chatter) NameWithBadge() string {
 	// Only add one of these badges
-	r := " "
+	r := "."
 	for _, v := range [][]string{
 		{TwitchBadgeBroadcaster, "B️"},
 		{TwitchBadgeStaff, "S"},
 		{TwitchBadgeGlobalMod, "G"},
 		{TwitchBadgeMod, "M"},
+		{TwitchBadgeSub, ""},
 		{TwitchBadgeTurbo, "T"},
 	} {
 		_, ok := cu.badges[v[0]]
@@ -156,17 +157,13 @@ func (cu *chatter) NameWithBadge() string {
 		}
 	}
 
-	s, ok := cu.badges[TwitchBadgeSub]
-	if ok {
-		r += fmt.Sprintf("[%2d]", s)
-	}
-
-	// to catch unknown badge types
+	// Special Badge Logic & to catch unknown badge types
 	for n, v := range cu.badges {
 		switch n {
 		case TwitchBadgeStaff:
 		case TwitchBadgeTurbo:
 		case TwitchBadgeSub:
+			r += fmt.Sprintf("S%d", v)
 		case TwitchBadgeMod:
 		case TwitchBadgeGlobalMod:
 		case TwitchBadgeBroadcaster:
@@ -177,6 +174,7 @@ func (cu *chatter) NameWithBadge() string {
 
 	}
 
+	// Badge Bits
 	b, ok := cu.badges[TwitchBadgeBits]
 	if ok {
 		return fmt.Sprintf("%s %s B%d", r, cu.nick, b)

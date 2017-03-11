@@ -193,7 +193,7 @@ func TestEmoteTagProcessor(t *testing.T) {
 	}{
 		{"", EmoteReplaceListFromBack{}, nil},
 		{"25:0-4,12-16/1902:6-10", EmoteReplaceListFromBack{
-			{25, 0, 4}, {1902, 6, 10}, {25, 12, 16},
+			{25, 12, 16}, {1902, 6, 10}, {25, 0, 4},
 		}, nil},
 	}
 
