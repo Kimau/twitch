@@ -24,8 +24,8 @@ const (
 
 // needs to bind to real address for VPN
 var (
-	flagIrcAddr        = flag.String("irc", "irc.afternet.org:6667", "irc server to connect to")
 	flagIrcVerbose     = flag.Bool("ircVerbose", false, "Should IRC logging be verbose")
+	flagIrcChannel     = flag.String("ircRoom", "", "Which Twitch chat room to Join")
 	flagIrcPerformFile = flag.String("performfile", "", "Load File and perform on load")
 
 	regexHostName = regexp.MustCompile(" ([a-z_]+)\\.$")
@@ -73,6 +73,11 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider) (*Chat, error) {
 	hasAuth, nick, pass, serverAddr := auth.GetIrcAuth()
 	if !hasAuth {
 		return nil, fmt.Errorf("Associated user has no valid Auth")
+	}
+
+	ircRoomToJoin := *flagIrcChannel
+	if len(ircRoomToJoin) < 2 {
+		ircRoomToJoin = nick
 	}
 
 	chat := &Chat{
