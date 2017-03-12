@@ -1,9 +1,6 @@
 package twitch
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 /*  v5 User Calls
 GetMe       | Get User                           | Gets a user object based on the OAuth token provided.
@@ -95,19 +92,16 @@ func (u *UsersMethod) GetByName(names []IrcNick) ([]User, error) {
 		UserList []User `json:"users"`
 	}{}
 
-	reqStr := "users?login="
-	for _, n := range names {
-		reqStr += string(n) + ","
-	}
-	reqStr = strings.TrimRight(reqStr, ",")
+	nameList := JoinNickComma(names)
+	reqStr := fmt.Sprintf("users?login=%s", nameList)
 
 	_, err := u.client.Get(u.au, reqStr, &uList)
 	if err != nil {
 		return nil, err
 	}
 
-	if uList.Total != 1 {
-		return nil, fmt.Errorf("Total Number of Users was: %d", uList.Total)
+	if uList.Total != len(names) {
+		return nil, fmt.Errorf("Total Number of Users was: %d\n %s", uList.Total, nameList)
 	}
 
 	return uList.UserList, nil

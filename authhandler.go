@@ -45,10 +45,13 @@ func (ah *Client) getRootToken(ua *UserAuth) error {
 }
 
 func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request) {
+
+	// fmt.Println("handleOAuthAdminStart:" + fmt.Sprintf(redirStringURL, ah.domain))
+
 	fullRedirStr := fmt.Sprintf(baseURL,
 		rootURL,
 		clientID,
-		redirURL,
+		fmt.Sprintf(redirStringURL, ah.domain),
 		mergeScopeString(DefaultStreamerScope),
 		ah.AdminAuth.oauthState)
 	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
@@ -58,10 +61,12 @@ func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
 	myState := GenerateRandomString(16)
 	ah.PendingLogins[authInternalState(myState)] = time.Now()
 
+	// fmt.Println("handleOAuthStart:" + fmt.Sprintf(redirStringURL, ah.domain))
+
 	fullRedirStr := fmt.Sprintf(baseURL,
 		rootURL,
 		clientID,
-		redirURL,
+		fmt.Sprintf(redirStringURL, ah.domain),
 		mergeScopeString(DefaultViewerScope),
 		myState)
 	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
@@ -137,17 +142,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 				strings.Join(scopeList, "\n\t"))
 
 			if ah.AdminAuth.scopes[scopeChatLogin] {
-				ah.Chat, err = createIrcClient(ah.AdminAuth, ah)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-				}
-
-				go func() {
-					err := ah.Chat.StartRunLoop()
-					if err != nil {
-						log.Fatal(err)
-					}
-				}()
+				go ah.startNewChat()
 			}
 
 		} else {
@@ -161,18 +156,11 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 			}
 		}()
 	} else {
+		v := ah.CreateViewer(tID, nil)
+		v.Auth = authU
 
-		v := &Viewer{
-			User:   nil,
-			Auth:   authU,
-			client: ah,
-		}
-
-		ah.Viewers[tID] = v
-		http.SetCookie(w, v.Auth.createSessionCookie())
+		http.SetCookie(w, v.Auth.createSessionCookie(ah.domain))
 		fmt.Fprintf(w, "Logged in %s #%s", v.GetNick(), tID)
-
-		go v.UpdateUser()
 	}
 }
 
@@ -183,7 +171,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	data.Set("client_id", clientID)
 	data.Set("client_secret", clientSecret)
 	data.Set("grant_type", "authorization_code")
-	data.Set("redirect_uri", redirURL)
+	data.Set("redirect_uri", fmt.Sprintf(redirStringURL, ah.domain))
 	data.Set("code", authU.ircCode)
 	data.Set("state", string(authU.oauthState))
 	payload := strings.NewReader(data.Encode())

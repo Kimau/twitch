@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"sort"
-
 	"github.com/go-irc/irc"
 	"golang.org/x/time/rate"
 )
@@ -33,6 +31,7 @@ var (
 	regexHostName = regexp.MustCompile(" ([a-z_]+)\\.$")
 	regexLogMsg   = regexp.MustCompile("^IRC: ([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([\\*\\_]*) (.*)")
 	regexPrivMsg  = regexp.MustCompile("([^ ]*) ([[:word:]]+) (B([0-9]+))?(\\[([0-9]+)\\])?(\\{(([0-9]+),([0-9]+),([0-9]+)|)+\\})?: (.*)")
+	regexHostMsg  = regexp.MustCompile("([[:word:]]+)\\.")
 
 	ignoreMsgCmd = map[string]bool{
 		IrcReplyYourhost: false,
@@ -89,17 +88,10 @@ type ircAuthProvider interface {
 	GetIrcAuth() (hasauth bool, name string, pass string, addr string)
 }
 
-type viewerProvider interface {
-	GetNick() IrcNick
-	GetViewer(ID) *Viewer
-	FindViewer(IrcNick) *Viewer
-	UpdateViewers([]IrcNick) []*Viewer
-	GetViewerFromChatter(*chatter) *Viewer
-}
-
 // Chat - IRC Chat interface
 type Chat struct {
 	Server  string
+	Room    string
 	verbose bool
 	config  irc.ClientConfig
 	limiter *rate.Limiter
@@ -133,6 +125,7 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider) (*Chat, error) {
 
 	chat := &Chat{
 		Server:  serverAddr,
+		Room:    ircRoomToJoin,
 		verbose: *flagIrcVerbose,
 		config: irc.ClientConfig{
 			Nick: nick,
@@ -144,7 +137,7 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider) (*Chat, error) {
 	}
 
 	chat.SetupLogWriter(&chat.logBuffer)
-	chat.Log("+------------ New Log ------------+")
+	chat.Logf("+------------ New Log ------------+ %s", time.Now())
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
 
@@ -163,16 +156,17 @@ func (c *Chat) Logf(s string, v ...interface{}) {
 }
 
 // SetupLogWriter - Set where the log is written to
-func (c *Chat) SetupLogWriter(newTarget io.Writer) {
-	c.msgLogger = log.New(newTarget, "IRC: ", log.Ltime)
+func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
+	c.logBuffer.Reset()
+	if newTarget != nil {
+		writeList := append(newTarget, &c.logBuffer)
+		c.msgLogger = log.New(io.MultiWriter(writeList...), "IRC: ", log.Ltime)
+	} else {
+		c.msgLogger = log.New(&c.logBuffer, "IRC: ", log.Ltime)
+	}
 	if c.msgLogger == nil {
 		log.Fatalln("Log shouldn't be null")
 	}
-}
-
-// GetLog - Getting Chat Log
-func (c *Chat) GetLog() *bytes.Buffer {
-	return &c.logBuffer
 }
 
 // StartRunLoop - Start Run Loop
@@ -231,7 +225,7 @@ func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/membership")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/tags")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/commands")
-	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.config.Nick))
+	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.Room))
 }
 
 func (c *Chat) nowHosting(target *Viewer) {
@@ -301,7 +295,21 @@ func printDebugTag(m *irc.Message) {
 
 }
 
-// JoinNicks - Join a list of Nicks into a string
+// JoinNickComma - Join a list of Nicks into a string with comma
+func JoinNickComma(nl []IrcNick) string {
+	nickformated := ""
+	for i, v := range nl {
+		if i == 0 {
+			nickformated = string(v)
+		} else {
+			nickformated += fmt.Sprintf(",%s", v)
+		}
+	}
+
+	return nickformated
+}
+
+// JoinNicks - Join a list of Nicks into text columns
 func JoinNicks(nl []IrcNick, columns int, nickPadLength int) string {
 	nickformated := ""
 	for i, v := range nl {
@@ -338,53 +346,6 @@ func (c *Chat) processNameList() {
 		nick := v.GetNick()
 		c.InRoom[nick] = v
 	}
-}
-
-func emoteTagToList(val irc.TagValue) (EmoteReplaceListFromBack, error) {
-
-	if len(val) <= 0 {
-		return EmoteReplaceListFromBack{}, nil
-	}
-
-	erList := EmoteReplaceListFromBack{}
-	emoteGroup := strings.Split(string(val), "/")
-
-	for _, eg := range emoteGroup {
-		egs := strings.Split(eg, ":")
-		egID, err := StringToEmoteID(egs[0])
-		if err != nil {
-			return nil, fmt.Errorf("Unable to StringToEmoteID %s - %s", egs[0], err.Error())
-		}
-
-		egReplaceSets := strings.Split(egs[1], ",")
-		for _, rs := range egReplaceSets {
-			if len(rs) < 2 {
-				return nil, fmt.Errorf("Unable to Split %s - %s", rs, err.Error())
-			}
-			rsSplit := strings.Split(rs, "-")
-
-			rsStart := rsSplit[0]
-			rsEnd := rsSplit[1]
-			rsStartVal, err := strconv.Atoi(rsStart)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to conv %s - %s", rsStart, err.Error())
-			}
-			rsEndVal, err := strconv.Atoi(rsEnd)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to conv %s - %s", rsEnd, err.Error())
-			}
-
-			erList = append(erList, EmoteReplace{
-				ID:    egID,
-				Start: rsStartVal,
-				End:   rsEndVal,
-			})
-		}
-	}
-
-	sort.Sort(erList)
-	return erList, nil
-
 }
 
 // Handle - IRC Message
@@ -424,7 +385,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case IrcReplyEndofnames:
 		c.processNameList()
-		nickformated := JoinNicks(c.nameReplyList, -1, -1)
+		nickformated := JoinNickComma(c.nameReplyList)
 		c.Logf("* Names: %s", nickformated)
 		c.nameReplyList = nil
 		// End of Name List
@@ -442,7 +403,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.Logf("* Join %s", m.Name)
 		nick := IrcNick(m.Name)
 
-		v := c.viewers.FindViewer(nick)
+		v, err := c.viewers.FindViewer(nick)
+		if err != nil {
+			log.Printf("JOIN ERROR [%s] not found\n%s", nick, err)
+			return
+		}
+
 		c.InRoom[nick] = v
 
 	case IrcCmdPart: // User Parted Channel
@@ -523,18 +489,28 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		cu := &chatter{}
 		cu.UpdateChatterFromTags(m)
 		v := c.viewers.GetViewerFromChatter(cu)
+
 		c.InRoom[v.GetNick()] = v
 		c.Logf("* User State updated from %s in %s", v.GetNick(), m.Trailing())
 
 	case TwitchCmdHostTarget:
 		match := regexHostName.FindStringSubmatch(m.Trailing())
 		if match != nil {
-			v := c.viewers.FindViewer(IrcNick(match[1]))
+			nick := IrcNick(match[1])
+			v, err := c.viewers.FindViewer(nick)
+			if err != nil {
+				log.Printf("HOST ERROR [%s] not found\n%s", nick, err)
+				return
+			}
 			c.nowHosting(v)
 		}
 
 	case TwitchCmdReconnect:
 		printDebugTag(m)
+
+	case IrcCmdMode:
+		// printDebugTag(m)
+		// TODO :: Handle Mode
 
 	case IrcCmdPrivmsg:
 		// < PRIVMSG #<channel> :This is a sample message
@@ -542,7 +518,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// > @badges=<badges>;bits=<bits>;color=<color>;display-name=<display-name>;emotes=<emotes>;id=<id>;mod=<mod>;room-id=<room-id>;subscriber=<subscriber>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
 		// Trailing = <message>
 		// Param[0] channel
-		v := c.viewers.FindViewer(IrcNick(m.Name))
+		v, err := c.viewers.FindViewer(IrcNick(m.Name))
+		if err != nil {
+			log.Printf("PRIV MSG ERROR [%s] not found\n%s", m.Name, err)
+			return
+		}
+
 		if v.Chatter == nil {
 			v.Chatter = &chatter{
 				nick: v.GetNick(),
@@ -594,7 +575,13 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			c.nowHosting(nil)
 
 		case TwitchMsgHostOn:
-			v := c.viewers.FindViewer(IrcNick(m.Trailing()))
+			nick := regexHostMsg.FindStringSubmatch(m.Trailing())
+			v, err := c.viewers.FindViewer(IrcNick(nick[1]))
+			if err != nil {
+				log.Printf("HOST MSG ON ERROR [%s] not found\n%s", nick[1], err)
+				return
+			}
+
 			c.nowHosting(v)
 
 		case TwitchMsgR9kOff:

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,14 +18,12 @@ import (
 const (
 	rootURL       = "https://api.twitch.tv/kraken/"
 	ircServerAddr = "irc.chat.twitch.tv:6667"
-	baseURL       = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
+	ircRoomToJoin = "kimau"
 	clientID      = "qhaf2djfhvkohczx08oyqra51hjasn"
 	clientSecret  = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
-	cookieDoman   = "localhost:30006"
-	redirURL      = "http://localhost:30006/twitch/after_signin/" //"https://twitch.otg-gt.xyz/twitch/after_signin/"
 
-	// ListenRoot - Http Listen Root
-	ListenRoot = "/twitch/"
+	redirStringURL = "http://%safter_signin/"
+	baseURL        = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
 
 	pageLimit    = 100
 	debugOptions = true
@@ -91,6 +90,8 @@ type authInternalState string
 type Client struct {
 	httpClient WebClient
 	url        *url.URL
+	domain     string
+	servePath  string
 
 	AdminUser    *User
 	AdminAuth    *UserAuth
@@ -106,11 +107,13 @@ type Client struct {
 }
 
 // CreateTwitchClient -
-func CreateTwitchClient(reqScopes []string) (*Client, error) {
+func CreateTwitchClient(servingFromDomain string, reqScopes []string) (*Client, error) {
 	urlParsed, _ := url.Parse(rootURL)
 
 	kb := Client{
 		url:          urlParsed,
+		domain:       servingFromDomain,
+		servePath:    servingFromDomain[strings.Index(servingFromDomain, "/"):],
 		httpClient:   &http.Client{},
 		AdminChannel: make(chan int, 3),
 
@@ -152,7 +155,8 @@ func (ah *Client) GetNick() IrcNick {
 // AdminHTTP for backoffice requests
 func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get Relative Path
-	relPath := req.URL.Path[strings.Index(req.URL.Path, ListenRoot)+len(ListenRoot):]
+
+	relPath := req.URL.Path[strings.Index(req.URL.Path, ah.servePath)+len(ah.servePath):]
 	log.Println("Twitch ADMIN: ", relPath)
 
 	// Force Auth
@@ -198,7 +202,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 
 func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get Relative Path
-	relPath := req.URL.Path[strings.Index(req.URL.Path, ListenRoot)+len(ListenRoot):]
+	relPath := req.URL.Path[strings.Index(req.URL.Path, ah.servePath)+len(ah.servePath):]
 
 	if strings.HasPrefix(relPath, "after_signin") {
 		ah.handlePublicOAuthResult(w, req)
@@ -208,7 +212,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// User isn't Auth start login
 	c, err := req.Cookie(UserAuthSessionCookieName)
 	if err != nil {
-		log.Println("Session Error", err)
+		log.Printf("Session Error: %s - %s", err, req.URL)
 		ah.handleOAuthStart(w, req)
 		return
 	}
@@ -217,21 +221,17 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	tid := ID(cList[0])
 
 	// Try Find User
-	u, ok := ah.Viewers[tid]
-	if !ok {
-		http.Error(w, fmt.Sprintf("Couldn't find user %s", tid), http.StatusUnauthorized)
-		return
-	}
+	vwr := ah.GetViewer(tid)
 
 	// User isn't Auth start login
-	if u.Auth == nil || (u.Auth.checkCookie(c) == false) {
-		log.Println("Cookie Failed", u.Auth, c)
+	if vwr.Auth == nil || (vwr.Auth.checkCookie(c) == false) {
+		log.Println("Cookie Failed", vwr.Auth, c)
 		ah.handleOAuthStart(w, req)
 		return
 	}
 
-	http.SetCookie(w, u.Auth.sessionCookie)
-	fmt.Fprintf(w, "You are logged in %s", u.GetNick())
+	http.SetCookie(w, vwr.Auth.sessionCookie)
+	fmt.Fprintf(w, "You are logged in %s", vwr.GetNick())
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
@@ -252,6 +252,8 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 	}
 
 	log.Printf("Twitch Get: %s", urlString)
+	//log.Printf("Twitch Get: %s \n---\n%s\n----\n", urlString, debug.Stack())
+
 	req, err := http.NewRequest("GET", urlString, nil)
 	if err != nil {
 		return "", err
@@ -285,4 +287,26 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 	}
 
 	return "", err
+}
+
+func (ah *Client) startNewChat() {
+	logFile, err := os.OpenFile("chat.log", os.O_CREATE|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		log.Fatal("Shouldn't fail to create chat log")
+	}
+	defer logFile.Close()
+
+	c, err := createIrcClient(ah.AdminAuth, ah)
+	if err != nil {
+		log.Printf("Failed to Start New Chat %s", err.Error())
+		return
+	}
+	ah.Chat = c
+	ah.Chat.SetupLogWriter(logFile)
+
+	err = ah.Chat.StartRunLoop()
+	if err != nil {
+		log.Printf("Chat Shutdown %s", err.Error())
+		return
+	}
 }

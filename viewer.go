@@ -3,17 +3,56 @@ package twitch
 import (
 	"fmt"
 	"log"
+	"strings"
+	"time"
 )
+
+// Currency use to track viewer Value
+type Currency int
+
+type viewerProvider interface {
+	GetNick() IrcNick
+	GetViewer(ID) *Viewer
+	FindViewer(IrcNick) (*Viewer, error)
+	UpdateViewers([]IrcNick) []*Viewer
+	GetViewerFromChatter(*chatter) *Viewer
+}
 
 // Viewer is basic Viewer
 type Viewer struct {
-	TwitchID ID
+	TwitchID  ID
+	Coins     Currency
+	WatchTime time.Duration
 
 	User    *User
 	Auth    *UserAuth
 	Chatter *chatter
 
 	client *Client
+}
+
+// CreateViewer - Create Bare Viewer
+func (ah *Client) CreateViewer(id ID, usr *User) *Viewer {
+	v, ok := ah.Viewers[id]
+
+	if (usr != nil) && usr.ID != id {
+		log.Fatalf("Failed to create because %s != %s", id, usr)
+	}
+
+	if !ok {
+		v = &Viewer{
+			TwitchID: id,
+			client:   ah,
+			User:     usr,
+		}
+		ah.Viewers[id] = v
+	}
+
+	if v.User == nil {
+		v.UpdateUser()
+	}
+
+	return v
 }
 
 // GetViewerFromChatter - Get Viewer from Chatter
@@ -23,11 +62,19 @@ func (ah *Client) GetViewerFromChatter(cu *chatter) *Viewer {
 		v.Chatter = cu
 		return v
 	} else if cu.nick != "" {
-		v := ah.FindViewer(cu.nick)
+		v, err := ah.FindViewer(cu.nick)
+		if err != nil {
+			log.Printf("GetViewerFromChatter - unable to get from nick\n%s", err)
+			return nil
+		}
 		v.Chatter = cu
 		return v
 	} else if cu.displayName != "" {
-		v := ah.FindViewer(IrcNick(cu.displayName))
+		v, err := ah.FindViewer(IrcNick(cu.displayName))
+		if err != nil {
+			log.Printf("GetViewerFromChatter - unable to get from display name\n%s", err)
+			return nil
+		}
 		v.Chatter = cu
 		return v
 	}
@@ -46,54 +93,70 @@ func (ah *Client) GetViewer(twitchID ID) *Viewer {
 			return nil
 		}
 
-		ah.Viewers[twitchID] = &Viewer{
-			TwitchID: twitchID,
-			User:     u,
-		}
+		v = ah.CreateViewer(twitchID, u)
 	}
 
 	return v
 }
 
-// FindViewer -
-func (ah *Client) FindViewer(nick IrcNick) *Viewer {
+func (ah *Client) findViewerByName(nick IrcNick) *Viewer {
+	nick = IrcNick(strings.ToLower(string(nick)))
 	for _, v := range ah.Viewers {
 		if v.User.Name == nick {
 			return v
 		}
 	}
+	return nil
+}
+
+// FindViewer -
+func (ah *Client) FindViewer(nick IrcNick) (*Viewer, error) {
+	v := ah.findViewerByName(nick)
+	if v != nil {
+		return v, nil
+	}
 
 	userList, err := ah.User.GetByName([]IrcNick{nick})
 	if err != nil {
-		log.Printf("Error in finding %s\n%s", nick, err.Error())
-		return nil
+		return nil, err
 	}
 
-	return &Viewer{
-		TwitchID: userList[0].ID,
-		User:     &userList[0],
-	}
+	return ah.CreateViewer(userList[0].ID, &userList[0]), nil
 }
 
 // UpdateViewers - Update Viewers from list of Names
 func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
-	userList, err := ah.User.GetByName(nickList)
+	vList := []*Viewer{}
+
+	unkownNicks := []IrcNick{}
+	// Check if Anyone Unknown
+	for _, nick := range nickList {
+		v := ah.findViewerByName(nick)
+		if v != nil {
+			vList = append(vList, v)
+		} else {
+			unkownNicks = append(unkownNicks, nick)
+		}
+	}
+
+	if len(unkownNicks) == 0 {
+		return vList
+	}
+
+	// Get Full List by Name
+	userList, err := ah.User.GetByName(unkownNicks)
 	if err != nil {
 		log.Printf("Error in userList \n---\n%s\n---\n%s",
-			JoinNicks(nickList, 4, 18),
+			JoinNicks(unkownNicks, 4, 18),
 			err.Error())
 		return nil
 	}
 
-	vList := []*Viewer{}
+	// Get Viewer
 	for _, u := range userList {
 		v, ok := ah.Viewers[u.ID]
 		if !ok {
-			v = &Viewer{
-				TwitchID: u.ID,
-				User:     &u,
-			}
-			ah.Viewers[u.ID] = v
+			v = ah.CreateViewer(u.ID, &u)
 		} else {
 			// Update User Data
 			v.User = &u

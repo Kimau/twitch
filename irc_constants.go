@@ -341,6 +341,8 @@ const (
 	TwitchTagMsgID             = "msg-id"
 	TwitchTagMsgParamMonths    = "msg-param-months"
 	TwitchTagMsgEmotes         = "emotes"
+	TwitchTagMsgTime           = "sent-ts"
+	TwitchTagMsgTimeTmi        = "tmi-sent-ts"
 	TwitchTagRoomEmote         = "emote-only"
 	TwitchTagRoomFollowersOnly = "followers-only"
 	TwitchTagRoomID            = "room-id"
@@ -376,4 +378,13 @@ const (
 	TwitchBadgeGlobalMod   = "global_mod"
 	TwitchBadgeBroadcaster = "broadcaster"
 	TwitchBadgeBits        = "bits"
+)
+
+// Twitch User Type
+const (
+	TwitchTypeEmpty     = "empty"
+	TwitchTypeMod       = "mod"
+	TwitchTypeGlobalMod = "global_mod"
+	TwitchTypeAdmin     = "admin"
+	TwitchTypeStaff     = "staff"
 )

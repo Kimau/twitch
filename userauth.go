@@ -103,12 +103,12 @@ func (ua *UserAuth) checkCookie(c *http.Cookie) bool {
 	return (ua.sessionCookie != nil && c != nil && ua.sessionCookie.Value == c.Value)
 }
 
-func (ua *UserAuth) createSessionCookie() *http.Cookie {
+func (ua *UserAuth) createSessionCookie(domain string) *http.Cookie {
 	expiration := time.Now().Add(365 * 24 * time.Hour)
 	ua.sessionCookie = &http.Cookie{
 		Name:    UserAuthSessionCookieName,
 		Value:   fmt.Sprintf("%s:%s", ua.token.UserID, GenerateRandomString(16)),
-		Domain:  cookieDoman, // Wont work for local host because not valid domain
+		Domain:  domain, // Wont work for local host because not valid domain
 		Path:    "/twitch",
 		Expires: expiration,
 	}

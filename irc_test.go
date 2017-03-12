@@ -144,6 +144,7 @@ func TestIrcMessage(t *testing.T) {
 
 	chat := &Chat{
 		Server:  serverAddr,
+		Room:    nick,
 		verbose: *flagIrcVerbose,
 		config: irc.ClientConfig{
 			Nick: nick,
@@ -155,7 +156,7 @@ func TestIrcMessage(t *testing.T) {
 		InRoom:  make(map[IrcNick]*Viewer),
 	}
 
-	chat.SetupLogWriter(&chat.logBuffer)
+	chat.SetupLogWriter(nil)
 	chat.msgLogger.Println("+------------ New Log ------------+")
 	chat.config.Handler = chat
 

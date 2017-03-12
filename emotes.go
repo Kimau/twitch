@@ -2,7 +2,11 @@ package twitch
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
+
+	"github.com/go-irc/irc"
 )
 
 const (
@@ -68,4 +72,51 @@ func StringToEmoteID(s string) (EmoteID, error) {
 		return EmoteID(-1), e
 	}
 	return EmoteID(i), nil
+}
+
+func emoteTagToList(val irc.TagValue) (EmoteReplaceListFromBack, error) {
+
+	if len(val) <= 0 {
+		return EmoteReplaceListFromBack{}, nil
+	}
+
+	erList := EmoteReplaceListFromBack{}
+	emoteGroup := strings.Split(string(val), "/")
+
+	for _, eg := range emoteGroup {
+		egs := strings.Split(eg, ":")
+		egID, err := StringToEmoteID(egs[0])
+		if err != nil {
+			return nil, fmt.Errorf("Unable to StringToEmoteID %s - %s", egs[0], err.Error())
+		}
+
+		egReplaceSets := strings.Split(egs[1], ",")
+		for _, rs := range egReplaceSets {
+			if len(rs) < 2 {
+				return nil, fmt.Errorf("Unable to Split %s - %s", rs, err.Error())
+			}
+			rsSplit := strings.Split(rs, "-")
+
+			rsStart := rsSplit[0]
+			rsEnd := rsSplit[1]
+			rsStartVal, err := strconv.Atoi(rsStart)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to conv %s - %s", rsStart, err.Error())
+			}
+			rsEndVal, err := strconv.Atoi(rsEnd)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to conv %s - %s", rsEnd, err.Error())
+			}
+
+			erList = append(erList, EmoteReplace{
+				ID:    egID,
+				Start: rsStartVal,
+				End:   rsEndVal,
+			})
+		}
+	}
+
+	sort.Sort(erList)
+	return erList, nil
+
 }

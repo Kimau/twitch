@@ -40,6 +40,8 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 		case TwitchTagBits: // Do nothing with bits value getting from Badge
 		case TwitchTagSystemMsg:
 		case TwitchTagMsgEmotes:
+		case TwitchTagMsgTime:
+		case TwitchTagMsgTimeTmi:
 		// ----- End of Do Nothing -----
 
 		case TwitchTagMsgID:
@@ -129,6 +131,19 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 
 		case TwitchTagUserType:
 			cu.userType = string(tagVal)
+
+			switch cu.userType {
+			case TwitchTypeEmpty:
+				cu.mod = false
+			case TwitchTypeMod:
+				cu.mod = true
+			case TwitchTypeGlobalMod:
+				cu.mod = true
+			case TwitchTypeAdmin:
+				cu.mod = true
+			case TwitchTypeStaff:
+				cu.mod = true
+			}
 
 		default:
 			fmt.Printf("Didn't deal with tag [%s:%s]\n", tagName, tagVal)
