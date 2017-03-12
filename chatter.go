@@ -10,25 +10,26 @@ import (
 	"github.com/go-irc/irc"
 )
 
-type chatter struct {
-	nick        IrcNick
-	displayName string
-	emoteSets   []EmoteSet
-	bits        int
+// Chatter - The IRC Chatter Data
+type Chatter struct {
+	Nick        IrcNick
+	DisplayName string
+	EmoteSets   []EmoteSet
+	Bits        int
 
-	mod      bool
-	sub      int
-	userType string
-	badges   map[string]int
-	color    string
+	Mod      bool
+	Sub      int
+	UserType string
+	Badges   map[string]int
+	Color    string
 
-	lastActive time.Time
+	LastActive time.Time
 	id         ID // not cannonical data
 }
 
-func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
+func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 
-	cu.lastActive = time.Now()
+	cu.LastActive = time.Now()
 
 	for tagName, tagVal := range m.Tags {
 		switch tagName {
@@ -58,7 +59,7 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 					continue
 				}
 
-				cu.sub = mVal
+				cu.Sub = mVal
 
 			case TwitchUserNoticeCharity:
 			// TODO :: Handle Charity Bits
@@ -71,18 +72,23 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 			cu.id = ID(tagVal)
 
 		case TwitchTagLogin:
-			cu.nick = IrcNick(tagVal)
+			cu.Nick = IrcNick(tagVal)
 
 		case TwitchTagUserTurbo:
-			if cu.badges == nil {
-				cu.badges = make(map[string]int)
+			if cu.Badges == nil {
+				cu.Badges = make(map[string]int)
 			}
-			cu.badges[TwitchTagUserTurbo] = 1
+			cu.Badges[TwitchTagUserTurbo] = 1
 
 		case TwitchTagUserBadge:
-			cu.badges = make(map[string]int)
+			cu.Badges = make(map[string]int)
+			if len(tagVal) < 1 {
+				continue
+			}
+
 			for _, badgeStr := range strings.Split(string(tagVal), ",") {
 				iVal := 0
+				fmt.Printf("BADGE [%s]", badgeStr)
 				t := strings.Split(badgeStr, "/")
 				testVal, err := strconv.Atoi(t[1])
 				if err != nil {
@@ -91,31 +97,31 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 					iVal = testVal
 				}
 				if t[0] == TwitchBadgeBits {
-					cu.bits = iVal
+					cu.Bits = iVal
 				}
-				cu.badges[t[0]] = iVal
+				cu.Badges[t[0]] = iVal
 			}
 
 		case TwitchTagUserColor:
-			cu.color = string(tagVal)
+			cu.Color = string(tagVal)
 
 		case TwitchTagUserDisplayName:
-			cu.displayName = string(tagVal)
-			if cu.nick == "" {
-				cu.nick = IrcNick(tagVal)
+			cu.DisplayName = string(tagVal)
+			if cu.Nick == "" {
+				cu.Nick = IrcNick(tagVal)
 			}
 		case TwitchTagUserEmoteSet:
 			emoteStrings := strings.Split(string(tagVal), ",")
-			cu.emoteSets = []EmoteSet{}
+			cu.EmoteSets = []EmoteSet{}
 			for _, v := range emoteStrings {
-				cu.emoteSets = append(cu.emoteSets, EmoteSet(v))
+				cu.EmoteSets = append(cu.EmoteSets, EmoteSet(v))
 			}
 		case TwitchTagUserMod:
 			intVal, err := strconv.Atoi(string(tagVal))
 			if err != nil {
 				log.Println(tagName, tagVal, err)
 			} else {
-				cu.mod = (intVal > 0)
+				cu.Mod = (intVal > 0)
 			}
 
 		case TwitchTagUserSub:
@@ -123,26 +129,26 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 			if err != nil {
 				log.Println(tagName, tagVal, err)
 			} else {
-				if intVal < 1 || intVal > cu.sub {
-					cu.sub = intVal
+				if intVal < 1 || intVal > cu.Sub {
+					cu.Sub = intVal
 				}
 
 			}
 
 		case TwitchTagUserType:
-			cu.userType = string(tagVal)
+			cu.UserType = string(tagVal)
 
-			switch cu.userType {
+			switch cu.UserType {
 			case TwitchTypeEmpty:
-				cu.mod = false
+				cu.Mod = false
 			case TwitchTypeMod:
-				cu.mod = true
+				cu.Mod = true
 			case TwitchTypeGlobalMod:
-				cu.mod = true
+				cu.Mod = true
 			case TwitchTypeAdmin:
-				cu.mod = true
+				cu.Mod = true
 			case TwitchTypeStaff:
-				cu.mod = true
+				cu.Mod = true
 			}
 
 		default:
@@ -154,7 +160,8 @@ func (cu *chatter) UpdateChatterFromTags(m *irc.Message) *chatter {
 	return cu
 }
 
-func (cu *chatter) NameWithBadge() string {
+// NameWithBadge - Outputs Name with Badge data enc in front
+func (cu *Chatter) NameWithBadge() string {
 	// Only add one of these badges
 	r := "."
 	for _, v := range [][]string{
@@ -163,9 +170,10 @@ func (cu *chatter) NameWithBadge() string {
 		{TwitchBadgeGlobalMod, "G"},
 		{TwitchBadgeMod, "M"},
 		{TwitchBadgeSub, ""},
+		{TwitchBadgePrime, "P"},
 		{TwitchBadgeTurbo, "T"},
 	} {
-		_, ok := cu.badges[v[0]]
+		_, ok := cu.Badges[v[0]]
 		if ok {
 			r = v[1]
 			break
@@ -173,10 +181,11 @@ func (cu *chatter) NameWithBadge() string {
 	}
 
 	// Special Badge Logic & to catch unknown badge types
-	for n, v := range cu.badges {
+	for n, v := range cu.Badges {
 		switch n {
 		case TwitchBadgeStaff:
 		case TwitchBadgeTurbo:
+		case TwitchBadgePrime:
 		case TwitchBadgeSub:
 			r += fmt.Sprintf("S%d", v)
 		case TwitchBadgeMod:
@@ -190,10 +199,10 @@ func (cu *chatter) NameWithBadge() string {
 	}
 
 	// Badge Bits
-	b, ok := cu.badges[TwitchBadgeBits]
+	b, ok := cu.Badges[TwitchBadgeBits]
 	if ok {
-		return fmt.Sprintf("%s %s B%d", r, cu.nick, b)
+		return fmt.Sprintf("%s %s B%d", r, cu.Nick, b)
 	}
 
-	return fmt.Sprintf("%s %s", r, cu.nick)
+	return fmt.Sprintf("%s %s", r, cu.Nick)
 }

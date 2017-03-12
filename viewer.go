@@ -7,17 +7,6 @@ import (
 	"time"
 )
 
-// Currency use to track viewer Value
-type Currency int
-
-type viewerProvider interface {
-	GetNick() IrcNick
-	GetViewer(ID) *Viewer
-	FindViewer(IrcNick) (*Viewer, error)
-	UpdateViewers([]IrcNick) []*Viewer
-	GetViewerFromChatter(*chatter) *Viewer
-}
-
 // Viewer is basic Viewer
 type Viewer struct {
 	TwitchID  ID
@@ -26,7 +15,7 @@ type Viewer struct {
 
 	User    *User
 	Auth    *UserAuth
-	Chatter *chatter
+	Chatter *Chatter
 
 	client *Client
 }
@@ -56,21 +45,21 @@ func (ah *Client) CreateViewer(id ID, usr *User) *Viewer {
 }
 
 // GetViewerFromChatter - Get Viewer from Chatter
-func (ah *Client) GetViewerFromChatter(cu *chatter) *Viewer {
+func (ah *Client) GetViewerFromChatter(cu *Chatter) *Viewer {
 	if cu.id != "" {
 		v := ah.GetViewer(cu.id)
 		v.Chatter = cu
 		return v
-	} else if cu.nick != "" {
-		v, err := ah.FindViewer(cu.nick)
+	} else if cu.Nick != "" {
+		v, err := ah.FindViewer(cu.Nick)
 		if err != nil {
 			log.Printf("GetViewerFromChatter - unable to get from nick\n%s", err)
 			return nil
 		}
 		v.Chatter = cu
 		return v
-	} else if cu.displayName != "" {
-		v, err := ah.FindViewer(IrcNick(cu.displayName))
+	} else if cu.DisplayName != "" {
+		v, err := ah.FindViewer(IrcNick(cu.DisplayName))
 		if err != nil {
 			log.Printf("GetViewerFromChatter - unable to get from display name\n%s", err)
 			return nil

@@ -44,6 +44,9 @@ var (
 		"@ban-reason=Follow\\sthe\\srules :tmi.twitch.tv CLEARCHAT #kimau :ronni",
 		"@badges=staff/1,broadcaster/1,turbo/1;color=#008000;display-name=ronni;emotes=;mod=0;msg-id=resub;msg-param-months=6;room-id=1337;subscriber=1;system-msg=ronni\\shas\\ssubscribed\\sfor\\s6\\smonths!;login=ronni;turbo=1;user-id=1337;user-type=staff :tmi.twitch.tv USERNOTICE #dallas :Great stream -- keep it up!",
 		"@badges=global_mod/1,turbo/1;color=#0D4200;display-name=dallas;emotes=25:0-4,12-16/1902:6-10;mod=0;room-id=1337;subscriber=0;turbo=1;user-id=1337;user-type=global_mod :ronni!ronni@ronni.tmi.twitch.tv PRIVMSG #dallas :Kappa Keepo Kappa",
+		`@badges=moderator/1,subscriber/12,bits/100000;color=#FF4500;display-name=VishtheMexican;emotes=;id=bc737831-427f-4005-8de6-901bf837fcf5;mod=1;room-id=100101057;sent-ts=1489350022460;subscriber=1;tmi-sent-ts=1489350020017;turbo=0;user-id=103759705;user-type=mod :vishthemexican!vishthemexican@vishthemexican.tmi.twitch.tv PRIVMSG #elvenaimee :oh, "L U L " is that face`,
+		"@badges=moderator/1,subscriber/12,bits/100000;color=#FF4500;display-name=VishtheMexican;emotes=;id=6ec55675-9218-441f-87fd-344456198ad7;mod=1;room-id=100101057;sent-ts=1489350024378;subscriber=1;tmi-sent-ts=1489350021930;turbo=0;user-id=103759705;user-type=mod :vishthemexican!vishthemexican@vishthemexican.tmi.twitch.tv PRIVMSG #elvenaimee :i never knew",
+		"@badges=;color=;display-name=charlipiccolina;emotes=;id=9af0482a-635b-4b17-b4b5-b88d470ac804;mod=0;room-id=100101057;subscriber=0;tmi-sent-ts=1489350025535;turbo=0;user-id=106846183;user-type= :charlipiccolina!charlipiccolina@charlipiccolina.tmi.twitch.tv PRIVMSG #elvenaimee :it's similar to Harvest Moon!",
 	}
 )
 
@@ -88,10 +91,10 @@ func (dvp *DummyViewProvider) GetViewer(id ID) *Viewer {
 
 	return v
 }
-func (dvp *DummyViewProvider) FindViewer(nick IrcNick) *Viewer {
+func (dvp *DummyViewProvider) FindViewer(nick IrcNick) (*Viewer, error) {
 	for _, v := range dvp.Viewers {
 		if v.User.Name == nick {
-			return v
+			return v, nil
 		}
 	}
 
@@ -104,29 +107,30 @@ func (dvp *DummyViewProvider) FindViewer(nick IrcNick) *Viewer {
 			DisplayName: string(nick),
 		},
 	}
-	return v
+	return v, nil
 }
 func (dvp *DummyViewProvider) UpdateViewers(nickList []IrcNick) []*Viewer {
 	vList := []*Viewer{}
 	for _, name := range nickList {
-		vList = append(vList, dvp.FindViewer(name))
+		v, _ := dvp.FindViewer(name)
+		vList = append(vList, v)
 	}
 
 	return vList
 }
 
 // GetViewerFromChatter - Get Viewer from Chatter
-func (dvp *DummyViewProvider) GetViewerFromChatter(cu *chatter) *Viewer {
+func (dvp *DummyViewProvider) GetViewerFromChatter(cu *Chatter) *Viewer {
 	if cu.id != "" {
 		v := dvp.GetViewer(cu.id)
 		v.Chatter = cu
 		return v
-	} else if cu.nick != "" {
-		v := dvp.FindViewer(cu.nick)
+	} else if cu.Nick != "" {
+		v, _ := dvp.FindViewer(cu.Nick)
 		v.Chatter = cu
 		return v
-	} else if cu.displayName != "" {
-		v := dvp.FindViewer(IrcNick(cu.displayName))
+	} else if cu.DisplayName != "" {
+		v, _ := dvp.FindViewer(IrcNick(cu.DisplayName))
 		v.Chatter = cu
 		return v
 	}
@@ -156,7 +160,7 @@ func TestIrcMessage(t *testing.T) {
 		InRoom:  make(map[IrcNick]*Viewer),
 	}
 
-	chat.SetupLogWriter(nil)
+	chat.SetupLogWriter()
 	chat.msgLogger.Println("+------------ New Log ------------+")
 	chat.config.Handler = chat
 

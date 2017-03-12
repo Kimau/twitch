@@ -373,8 +373,9 @@ const (
 const (
 	TwitchBadgeStaff       = "staff"
 	TwitchBadgeTurbo       = "turbo"
+	TwitchBadgePrime       = "premium"
 	TwitchBadgeSub         = "sub"
-	TwitchBadgeMod         = "mod"
+	TwitchBadgeMod         = "moderator"
 	TwitchBadgeGlobalMod   = "global_mod"
 	TwitchBadgeBroadcaster = "broadcaster"
 	TwitchBadgeBits        = "bits"

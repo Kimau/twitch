@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +17,7 @@ import (
 const (
 	rootURL       = "https://api.twitch.tv/kraken/"
 	ircServerAddr = "irc.chat.twitch.tv:6667"
-	ircRoomToJoin = "kimau"
+	ircRoomToJoin = "elvenaimee"
 	clientID      = "qhaf2djfhvkohczx08oyqra51hjasn"
 	clientSecret  = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
 
@@ -152,54 +151,6 @@ func (ah *Client) GetNick() IrcNick {
 	return ""
 }
 
-// AdminHTTP for backoffice requests
-func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
-	// Get Relative Path
-
-	relPath := req.URL.Path[strings.Index(req.URL.Path, ah.servePath)+len(ah.servePath):]
-	log.Println("Twitch ADMIN: ", relPath)
-
-	// Force Auth
-	if ah.AdminAuth.token == nil {
-		ah.handleOAuthAdminStart(w, req)
-		return
-	}
-
-	switch {
-	case strings.HasPrefix(relPath, "me"):
-		uf, err := ah.User.GetMe()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintf(w, "%#v", uf)
-
-	case strings.HasPrefix(relPath, "user"):
-		userName := regexp.MustCompile("username/([\\w]+)/*")
-		r := userName.FindStringSubmatch(relPath)
-		nameList := []IrcNick{IrcNick(r[1])}
-		uf, err := ah.User.GetByName(nameList)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprintf(w, "%#v", uf)
-
-	case debugOptions && strings.HasPrefix(relPath, "debug/"):
-		splitD := strings.Split(req.RequestURI, "debug/")
-		log.Println("Debug: " + splitD[1])
-		body, err := ah.Get(ah.AdminAuth, splitD[1], nil)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprint(w, body)
-
-	default:
-		http.Error(w, fmt.Sprintf("Invalid Endpoint: %s", req.URL.Path), 404)
-	}
-}
-
 func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Get Relative Path
 	relPath := req.URL.Path[strings.Index(req.URL.Path, ah.servePath)+len(ah.servePath):]
@@ -290,7 +241,7 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 }
 
 func (ah *Client) startNewChat() {
-	logFile, err := os.OpenFile("chat.log", os.O_CREATE|os.O_CREATE, os.ModePerm)
+	logFile, err := os.OpenFile("chat.log", os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
 		log.Fatal("Shouldn't fail to create chat log")
 	}

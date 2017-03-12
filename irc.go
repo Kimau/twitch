@@ -40,54 +40,6 @@ var (
 	}
 )
 
-type chatMode struct {
-	subsOnly      bool
-	emoteOnly     bool
-	followersOnly bool
-	slowMode      bool
-	r9k           bool
-	lang          string
-	hosting       *Viewer
-}
-
-func (cm chatMode) String() string {
-	if cm.hosting != nil {
-		return fmt.Sprintf("Hosting %s", cm.hosting.GetNick())
-	}
-	s := ""
-
-	if len(cm.lang) > 0 {
-		s += fmt.Sprintf("[%s]", cm.lang)
-	}
-
-	if cm.subsOnly {
-		s += " Subs only"
-	}
-	if cm.emoteOnly {
-		s += " Emotes only"
-	}
-	if cm.followersOnly {
-		s += " Followers only"
-	}
-	if cm.slowMode {
-		s += " Slow mode"
-	}
-	if cm.r9k {
-		s += " r9k"
-	}
-
-	if len(s) < 1 {
-		return "default"
-	}
-
-	return s
-}
-
-// ircAuthProvider - Provides Auth normally expects UserAuth
-type ircAuthProvider interface {
-	GetIrcAuth() (hasauth bool, name string, pass string, addr string)
-}
-
 // Chat - IRC Chat interface
 type Chat struct {
 	Server  string
@@ -96,7 +48,7 @@ type Chat struct {
 	config  irc.ClientConfig
 	limiter *rate.Limiter
 
-	self   *chatter
+	self   *Chatter
 	mode   chatMode
 	InRoom map[IrcNick]*Viewer
 
@@ -136,37 +88,11 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider) (*Chat, error) {
 		viewers: vp,
 	}
 
-	chat.SetupLogWriter(&chat.logBuffer)
-	chat.Logf("+------------ New Log ------------+ %s", time.Now())
+	chat.SetupLogWriter()
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
 
 	return chat, nil
-}
-
-// Log - Log to internal message logger
-func (c *Chat) Log(s string) {
-	s = strings.Replace(strings.Replace(s, "\\", "\\\\", -1), "\n", "\\n", -1)
-	c.msgLogger.Print(s)
-}
-
-// Logf - FMT interface
-func (c *Chat) Logf(s string, v ...interface{}) {
-	c.Log(fmt.Sprintf(s, v...))
-}
-
-// SetupLogWriter - Set where the log is written to
-func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
-	c.logBuffer.Reset()
-	if newTarget != nil {
-		writeList := append(newTarget, &c.logBuffer)
-		c.msgLogger = log.New(io.MultiWriter(writeList...), "IRC: ", log.Ltime)
-	} else {
-		c.msgLogger = log.New(&c.logBuffer, "IRC: ", log.Ltime)
-	}
-	if c.msgLogger == nil {
-		log.Fatalln("Log shouldn't be null")
-	}
 }
 
 // StartRunLoop - Start Run Loop
@@ -217,6 +143,35 @@ func (c *Chat) WriteRawIrcMsg(msg string) {
 	if err != nil {
 		log.Printf("Write Raw Failed: %s\n %s", msg, err.Error())
 	}
+}
+
+// Log - Log to internal message logger
+func (c *Chat) Log(s string) {
+	s = strings.Replace(strings.Replace(s, "\\", "\\\\", -1), "\n", "\\n", -1)
+	c.msgLogger.Print(s)
+}
+
+// Logf - FMT interface
+func (c *Chat) Logf(s string, v ...interface{}) {
+	c.Log(fmt.Sprintf(s, v...))
+}
+
+// SetupLogWriter - Set where the log is written to
+func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
+	c.logBuffer.Reset()
+	if newTarget != nil {
+		writeList := append(newTarget, &c.logBuffer)
+		mw := io.MultiWriter(writeList...)
+		c.msgLogger = log.New(mw, "IRC: ", log.Ltime)
+	} else {
+		c.msgLogger = log.New(&c.logBuffer, "IRC: ", log.Ltime)
+	}
+
+	if c.msgLogger == nil {
+		log.Fatalln("Log shouldn't be null")
+	}
+
+	c.Logf("+------------ New Log ------------+ %s", time.Now())
 }
 
 func (c *Chat) respondToWelcome(m *irc.Message) {
@@ -419,8 +374,8 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.clearChat(m)
 
 	case TwitchCmdGlobalUserState:
-		cu := &chatter{}
-		cu.UpdateChatterFromTags(m)
+		cu := &Chatter{}
+		cu.updateChatterFromTags(m)
 		v := c.viewers.GetViewerFromChatter(cu)
 		c.Logf("_ Global User State for %s", v.GetNick())
 
@@ -480,14 +435,14 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.Logf("* %s updated: %s", chatChanName, c.mode)
 
 	case TwitchCmdUserNotice:
-		cu := &chatter{}
-		cu.UpdateChatterFromTags(m)
+		cu := &Chatter{}
+		cu.updateChatterFromTags(m)
 		c.viewers.GetViewerFromChatter(cu)
 		c.Logf("* %s", m.Tags[TwitchTagSystemMsg])
 
 	case TwitchCmdUserState:
-		cu := &chatter{}
-		cu.UpdateChatterFromTags(m)
+		cu := &Chatter{}
+		cu.updateChatterFromTags(m)
 		v := c.viewers.GetViewerFromChatter(cu)
 
 		c.InRoom[v.GetNick()] = v
@@ -525,11 +480,11 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 		if v.Chatter == nil {
-			v.Chatter = &chatter{
-				nick: v.GetNick(),
+			v.Chatter = &Chatter{
+				Nick: v.GetNick(),
 			}
 		}
-		v.Chatter.UpdateChatterFromTags(m)
+		v.Chatter.updateChatterFromTags(m)
 
 		finalText := v.Chatter.NameWithBadge()
 
