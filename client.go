@@ -17,7 +17,7 @@ import (
 const (
 	rootURL       = "https://api.twitch.tv/kraken/"
 	ircServerAddr = "localdev:36667" //"irc.chat.twitch.tv:6667"
-	ircRoomToJoin = "nalcs1"
+	ircRoomToJoin = "kimau"
 	clientID      = "qhaf2djfhvkohczx08oyqra51hjasn"
 	clientSecret  = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
 

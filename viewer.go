@@ -24,10 +24,6 @@ type Viewer struct {
 func (ah *Client) CreateViewer(id ID, usr *User) *Viewer {
 	v, ok := ah.Viewers[id]
 
-	if (usr != nil) && usr.ID != id {
-		log.Fatalf("Failed to create because %s != %s", id, usr)
-	}
-
 	if !ok {
 		v = &Viewer{
 			TwitchID: id,
@@ -39,6 +35,10 @@ func (ah *Client) CreateViewer(id ID, usr *User) *Viewer {
 
 	if v.User == nil {
 		v.UpdateUser()
+	}
+
+	if v.TwitchID != id || v.User.ID != id {
+		log.Fatalf("Twitch ID doesn't match %s %s %s", id, v.TwitchID, v.User.ID)
 	}
 
 	return v
@@ -120,9 +120,9 @@ func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
 	unkownNicks := []IrcNick{}
 	// Check if Anyone Unknown
 	for _, nick := range nickList {
-		v := ah.findViewerByName(nick)
-		if v != nil {
-			vList = append(vList, v)
+		ov := ah.findViewerByName(nick)
+		if ov != nil {
+			vList = append(vList, ov)
 		} else {
 			unkownNicks = append(unkownNicks, nick)
 		}

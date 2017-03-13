@@ -23,6 +23,10 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	switch {
+	case strings.HasPrefix(relPath, "utest"):
+		v := ah.UpdateViewers([]IrcNick{"kimau", "boo", "seriesofblues", "seriesofblurs"})
+		fmt.Fprintf(w, "%#v", v)
+
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()
 		if err != nil {

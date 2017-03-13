@@ -1,6 +1,10 @@
 package twitch
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+	"sync"
+)
 
 /*  v5 User Calls
 GetMe       | Get User                           | Gets a user object based on the OAuth token provided.
@@ -84,8 +88,7 @@ func (u *UsersMethod) Get(id ID) (*User, error) {
 	return &user, nil
 }
 
-// GetByName - Get User by v3 Name
-func (u *UsersMethod) GetByName(names []IrcNick) ([]User, error) {
+func (u *UsersMethod) getByNameSmall(names []IrcNick) ([]User, error) {
 
 	uList := struct {
 		Total    int    `json:"_total"`
@@ -101,10 +104,70 @@ func (u *UsersMethod) GetByName(names []IrcNick) ([]User, error) {
 	}
 
 	if uList.Total != len(names) {
-		return nil, fmt.Errorf("Total Number of Users was: %d\n %s", uList.Total, nameList)
+		log.Printf("Total Number of Users was: %d / %d", uList.Total, len(names))
 	}
 
 	return uList.UserList, nil
+}
+
+// GetByName - Get User by v3 Name
+func (u *UsersMethod) GetByName(names []IrcNick) ([]User, error) {
+	numUsersPerGroup := 25
+	if len(names) < 25 {
+		return u.getByNameSmall(names)
+	}
+
+	uList := make([]struct {
+		Total    int    `json:"_total"`
+		UserList []User `json:"users"`
+	}, len(names)/numUsersPerGroup+1, len(names)/numUsersPerGroup+2)
+
+	lNum := 0
+	errChannel := make(chan error, len(names)/numUsersPerGroup+1)
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < len(names); i += numUsersPerGroup {
+		endPointI := i + numUsersPerGroup
+		if endPointI > len(names) {
+			endPointI = len(names)
+		}
+
+		wg.Add(1)
+		go func(gnum int, is int, ie int) {
+			nameList := JoinNickComma(names[is:ie])
+
+			reqStr := fmt.Sprintf("users?login=%s", nameList)
+
+			_, err := u.client.Get(u.au, reqStr, &uList[gnum])
+			if err != nil {
+				errChannel <- err
+			}
+			wg.Done()
+		}(lNum, i, endPointI)
+
+		lNum++
+	}
+
+	wg.Wait()
+	errChannel <- nil
+
+	err := <-errChannel
+	if err != nil {
+		return nil, err
+	}
+
+	finalList := []User{}
+	totalCount := 0
+	for _, v := range uList {
+		finalList = append(finalList, v.UserList...)
+		totalCount += v.Total
+	}
+
+	if totalCount != len(names) {
+		log.Printf("Total Number of Users was: %d / %d", totalCount, len(names))
+	}
+
+	return finalList, nil
 }
 
 // EmoteList - Get User Emotes
