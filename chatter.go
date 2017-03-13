@@ -88,7 +88,7 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 
 			for _, badgeStr := range strings.Split(string(tagVal), ",") {
 				iVal := 0
-				fmt.Printf("BADGE [%s]", badgeStr)
+				// fmt.Printf("BADGE [%s]", badgeStr)
 				t := strings.Split(badgeStr, "/")
 				testVal, err := strconv.Atoi(t[1])
 				if err != nil {
