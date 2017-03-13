@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -52,6 +53,12 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(w, body)
 
 	default:
-		http.Error(w, fmt.Sprintf("Invalid Endpoint: %s", req.URL.Path), 404)
+		b, err := json.Marshal(ah.AdminUser)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid Endpoint: %s", req.URL.Path), 404)
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, string(b))
+		}
 	}
 }
