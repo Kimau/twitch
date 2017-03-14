@@ -36,9 +36,9 @@ func (ah *Client) getRootToken(ua *UserAuth) error {
 		return err
 	}
 
-	if clientID != ua.token.ClientID {
+	if ah.ClientID != ua.token.ClientID {
 		ua.token = nil
-		return fmt.Errorf("Client ID doesn't match [%s:%s]", clientID, ua.token.ClientID)
+		return fmt.Errorf("Client ID doesn't match [%s:%s]", ah.ClientID, ua.token.ClientID)
 	}
 
 	return nil
@@ -49,8 +49,8 @@ func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request
 	// fmt.Println("handleOAuthAdminStart:" + fmt.Sprintf(redirStringURL, ah.domain))
 
 	fullRedirStr := fmt.Sprintf(baseURL,
-		rootURL,
-		clientID,
+		ah.RootURL,
+		ah.ClientID,
 		fmt.Sprintf(redirStringURL, ah.domain),
 		mergeScopeString(DefaultStreamerScope),
 		ah.AdminAuth.oauthState)
@@ -64,8 +64,8 @@ func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
 	// fmt.Println("handleOAuthStart:" + fmt.Sprintf(redirStringURL, ah.domain))
 
 	fullRedirStr := fmt.Sprintf(baseURL,
-		rootURL,
-		clientID,
+		ah.RootURL,
+		ah.ClientID,
 		fmt.Sprintf(redirStringURL, ah.domain),
 		mergeScopeString(DefaultViewerScope),
 		myState)
@@ -168,8 +168,8 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 
 	// Setup Payload
 	data := url.Values{}
-	data.Set("client_id", clientID)
-	data.Set("client_secret", clientSecret)
+	data.Set("client_id", ah.ClientID)
+	data.Set("client_secret", ah.ClientSecret)
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", fmt.Sprintf(redirStringURL, ah.domain))
 	data.Set("code", authU.ircCode)
@@ -184,7 +184,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	}
 
 	req.Header.Add("accept", "application/vnd.twitchtv.v5+json")
-	req.Header.Add("client-id", clientID)
+	req.Header.Add("client-id", ah.ClientID)
 	req.Header.Add("content-type", "application/x-www-form-urlencoded")
 	req.Header.Add("content-length", strconv.Itoa(len(data.Encode())))
 	req.Header.Add("cache-control", "no-cache")

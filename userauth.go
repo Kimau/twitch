@@ -46,13 +46,13 @@ func (ua *UserAuth) GetAuth() (bool, string) {
 }
 
 // GetIrcAuth - returns the stuff needed for IRC
-func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr string) {
+func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string) {
 	isAuth, _ := ua.GetAuth()
 	if !isAuth {
-		return false, "", "", ircServerAddr
+		return false, "", ""
 	}
 
-	return true, string(ua.token.Username), "oauth:" + ua.authcode, ircServerAddr
+	return true, string(ua.token.Username), "oauth:" + ua.authcode
 }
 
 func mergeScopeString(scopeList []string) string {

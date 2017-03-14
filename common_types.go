@@ -18,7 +18,7 @@ type WebClient interface {
 
 // ircAuthProvider - Provides Auth normally expects UserAuth
 type ircAuthProvider interface {
-	GetIrcAuth() (hasauth bool, name string, pass string, addr string)
+	GetIrcAuth() (hasauth bool, name string, pass string)
 }
 
 type viewerProvider interface {

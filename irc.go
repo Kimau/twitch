@@ -66,11 +66,11 @@ func init() {
 
 }
 
-func createIrcClient(auth ircAuthProvider, vp viewerProvider) (*Chat, error) {
+func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string) (*Chat, error) {
 
 	log.Println("Creating IRC Client")
 
-	hasAuth, nick, pass, serverAddr := auth.GetIrcAuth()
+	hasAuth, nick, pass := auth.GetIrcAuth()
 	if !hasAuth {
 		return nil, fmt.Errorf("Associated user has no valid Auth")
 	}

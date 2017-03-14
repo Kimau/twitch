@@ -15,12 +15,6 @@ import (
 )
 
 const (
-	rootURL       = "https://api.twitch.tv/kraken/"
-	ircServerAddr = "localdev:36667" //"irc.chat.twitch.tv:6667"
-	ircRoomToJoin = "kimau"
-	clientID      = "qhaf2djfhvkohczx08oyqra51hjasn"
-	clientSecret  = "u5jj3g6qtcj8fut5yx2sj50u525i3a"
-
 	redirStringURL = "http://%safter_signin/"
 	baseURL        = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
 
@@ -87,6 +81,8 @@ type authInternalState string
 
 // Client - Twitch OAuth Client
 type Client struct {
+	*secretData
+
 	httpClient WebClient
 	url        *url.URL
 	domain     string
@@ -107,10 +103,7 @@ type Client struct {
 
 // CreateTwitchClient -
 func CreateTwitchClient(servingFromDomain string, reqScopes []string) (*Client, error) {
-	urlParsed, _ := url.Parse(rootURL)
-
 	kb := Client{
-		url:          urlParsed,
 		domain:       servingFromDomain,
 		servePath:    servingFromDomain[strings.Index(servingFromDomain, "/"):],
 		httpClient:   &http.Client{},
@@ -119,6 +112,9 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string) (*Client, 
 		Viewers:       make(map[ID]*Viewer),
 		PendingLogins: make(map[authInternalState]time.Time),
 	}
+
+	kb.loadSecrets()
+	kb.url, _ = url.Parse(kb.RootURL)
 
 	kb.AdminAuth = &UserAuth{
 		token:      nil,
@@ -211,7 +207,7 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 	}
 
 	req.Header.Add("Accept", "application/vnd.twitchtv.v5+json")
-	req.Header.Add("Client-ID", clientID)
+	req.Header.Add("Client-ID", ah.ClientID)
 	if au != nil && au.token != nil {
 		req.Header.Add("Authorization", "OAuth "+au.authcode)
 	}
@@ -247,7 +243,7 @@ func (ah *Client) startNewChat() {
 	}
 	defer logFile.Close()
 
-	c, err := createIrcClient(ah.AdminAuth, ah)
+	c, err := createIrcClient(ah.AdminAuth, ah, ah.IrcServerAddr)
 	if err != nil {
 		log.Printf("Failed to Start New Chat %s", err.Error())
 		return
