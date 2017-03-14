@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -15,31 +14,18 @@ import (
 )
 
 const (
+	twitchBase     = "https://api.twitch.tv/kraken/"
+	twitchAuthURL  = "https://api.twitch.tv/kraken/oauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
 	redirStringURL = "http://%safter_signin/"
-	baseURL        = "%soauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
 
 	pageLimit    = 100
 	debugOptions = true
-
-	scopeChannelCheckSubscription = "channel_check_subscription" // "channel_check_subscription" - Read whether a user is subscribed to your channel.
-	scopeChannelCommercial        = "channel_commercial"         // "channel_commercial"         - Trigger commercials on channel.
-	scopeChannelEditor            = "channel_editor"             // "channel_editor"             - Write channel metadata (game, status, etc).
-	scopeChannelFeedEdit          = "channel_feed_edit"          // "channel_feed_edit"          - Add posts and reactions to a channel feed.
-	scopeChannelFeedRead          = "channel_feed_read"          // "channel_feed_read"          - View a channel feed.
-	scopeChannelRead              = "channel_read"               // "channel_read"               - Read nonpublic channel information, including email address and stream key.
-	scopeChannelStream            = "channel_stream"             // "channel_stream"             - Reset a channel’s stream key.
-	scopeChannelSubscriptions     = "channel_subscriptions"      // "channel_subscriptions"      - Read all subscribers to your channel.
-	scopeChatLogin                = "chat_login"                 // "chat_login"                 - Log into chat and send messages.
-	scopeUserBlocksEdit           = "user_blocks_edit"           // "user_blocks_edit"           - Turn on/off ignoring a user. Ignoring a user means you cannot see them type, receive messages from them, etc.
-	scopeUserBlocksRead           = "user_blocks_read"           // "user_blocks_read"           - Read a user’s list of ignored users.
-	scopeUserFollowsEdit          = "user_follows_edit"          // "user_follows_edit"          - Manage a user’s followed channels.
-	scopeUserRead                 = "user_read"                  // "user_read"                  - Read nonpublic user information, like email address.
-	scopeUserSubscriptions        = "user_subscriptions"         // "user_subscriptions"         - Read a user’s subscriptions.
 )
 
 var (
 	// ValidScopes is a list of valid scopes your allowed
 	ValidScopes = []string{
+		scopeViewingActivityRead,
 		scopeChannelCheckSubscription,
 		scopeChannelCommercial,
 		scopeChannelEditor,
@@ -58,6 +44,7 @@ var (
 
 	// DefaultStreamerScope - Good set of scopes for Streamer Login
 	DefaultStreamerScope = []string{
+		scopeViewingActivityRead,
 		scopeChannelCheckSubscription,
 		scopeChannelEditor,
 		scopeChannelFeedEdit,
@@ -73,7 +60,9 @@ var (
 	}
 
 	// DefaultViewerScope - Good set of scopes for Viewer Login
-	DefaultViewerScope = []string{}
+	DefaultViewerScope = []string{
+		scopeViewingActivityRead,
+	}
 )
 
 // authInternalState - OAuth State token for security
@@ -81,10 +70,9 @@ type authInternalState string
 
 // Client - Twitch OAuth Client
 type Client struct {
-	*secretData
+	*tokenData
 
 	httpClient WebClient
-	url        *url.URL
 	domain     string
 	servePath  string
 
@@ -114,7 +102,6 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string) (*Client, 
 	}
 
 	kb.loadSecrets()
-	kb.url, _ = url.Parse(kb.RootURL)
 
 	kb.AdminAuth = &UserAuth{
 		token:      nil,
@@ -184,24 +171,10 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
 // If you call it with a nil user or user without a token it will do request without auth
 func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string, error) {
+	log.Printf("Twitch Get: %s", path)
+	path = twitchBase + path
 
-	urlString := "https://api.twitch.tv/kraken"
-	if path != "" {
-
-		rel, err := url.Parse(path)
-
-		if err != nil {
-			return "", err
-		}
-
-		subURL := ah.url.ResolveReference(rel)
-		urlString = subURL.String()
-	}
-
-	log.Printf("Twitch Get: %s", urlString)
-	//log.Printf("Twitch Get: %s \n---\n%s\n----\n", urlString, debug.Stack())
-
-	req, err := http.NewRequest("GET", urlString, nil)
+	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
 		return "", err
 	}

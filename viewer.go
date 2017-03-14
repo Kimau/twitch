@@ -3,6 +3,7 @@ package twitch
 import (
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -21,24 +22,42 @@ type Viewer struct {
 }
 
 // CreateViewer - Create Bare Viewer
-func (ah *Client) CreateViewer(id ID, usr *User) *Viewer {
+func (ah *Client) CreateViewer(id ID) *Viewer {
 	v, ok := ah.Viewers[id]
 
-	if !ok {
+	if ok {
+		log.Printf("Attempting to Create user that already exsists: %s", id)
+	} else {
 		v = &Viewer{
 			TwitchID: id,
 			client:   ah,
-			User:     usr,
 		}
 		ah.Viewers[id] = v
 	}
 
-	if v.User == nil {
-		v.UpdateUser()
+	v.UpdateUser()
+	if v.TwitchID != id || v.User.ID != id {
+		debug.PrintStack()
+		log.Fatalf("Twitch ID doesn't match %s %s %s", id, v.TwitchID, v.User.ID)
 	}
 
-	if v.TwitchID != id || v.User.ID != id {
-		log.Fatalf("Twitch ID doesn't match %s %s %s", id, v.TwitchID, v.User.ID)
+	return v
+}
+
+// CreateViewerFromUser - Create Viewer from User
+func (ah *Client) CreateViewerFromUser(usr User) *Viewer {
+	v, ok := ah.Viewers[usr.ID]
+
+	if ok {
+		log.Printf("Attempting to Create %s that already exsists: %s", usr.DisplayName, usr.ID)
+	} else {
+		v = &Viewer{
+			TwitchID: usr.ID,
+			client:   ah,
+			User:     &usr,
+		}
+
+		ah.Viewers[usr.ID] = v
 	}
 
 	return v
@@ -82,7 +101,7 @@ func (ah *Client) GetViewer(twitchID ID) *Viewer {
 			return nil
 		}
 
-		v = ah.CreateViewer(twitchID, u)
+		v = ah.CreateViewerFromUser(*u)
 	}
 
 	return v
@@ -110,7 +129,7 @@ func (ah *Client) FindViewer(nick IrcNick) (*Viewer, error) {
 		return nil, err
 	}
 
-	return ah.CreateViewer(userList[0].ID, &userList[0]), nil
+	return ah.CreateViewerFromUser(userList[0]), nil
 }
 
 // UpdateViewers - Update Viewers from list of Names
@@ -142,15 +161,8 @@ func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
 	}
 
 	// Get Viewer
-	for _, u := range userList {
-		v, ok := ah.Viewers[u.ID]
-		if !ok {
-			v = ah.CreateViewer(u.ID, &u)
-		} else {
-			// Update User Data
-			v.User = &u
-		}
-		vList = append(vList, v)
+	for _, usr := range userList {
+		vList = append(vList, ah.CreateViewerFromUser(usr))
 	}
 
 	return vList

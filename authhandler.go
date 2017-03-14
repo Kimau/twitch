@@ -46,14 +46,12 @@ func (ah *Client) getRootToken(ua *UserAuth) error {
 
 func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request) {
 
-	// fmt.Println("handleOAuthAdminStart:" + fmt.Sprintf(redirStringURL, ah.domain))
-
-	fullRedirStr := fmt.Sprintf(baseURL,
-		ah.RootURL,
+	fullRedirStr := fmt.Sprintf(twitchAuthURL,
 		ah.ClientID,
 		fmt.Sprintf(redirStringURL, ah.domain),
 		mergeScopeString(DefaultStreamerScope),
 		ah.AdminAuth.oauthState)
+
 	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
 }
 
@@ -61,10 +59,7 @@ func (ah *Client) handleOAuthStart(w http.ResponseWriter, req *http.Request) {
 	myState := GenerateRandomString(16)
 	ah.PendingLogins[authInternalState(myState)] = time.Now()
 
-	// fmt.Println("handleOAuthStart:" + fmt.Sprintf(redirStringURL, ah.domain))
-
-	fullRedirStr := fmt.Sprintf(baseURL,
-		ah.RootURL,
+	fullRedirStr := fmt.Sprintf(twitchAuthURL,
 		ah.ClientID,
 		fmt.Sprintf(redirStringURL, ah.domain),
 		mergeScopeString(DefaultViewerScope),
@@ -156,7 +151,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 			}
 		}()
 	} else {
-		v := ah.CreateViewer(tID, nil)
+		v := ah.CreateViewer(tID)
 		v.Auth = authU
 
 		http.SetCookie(w, v.Auth.createSessionCookie(ah.domain))

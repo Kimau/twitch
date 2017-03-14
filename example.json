@@ -1,0 +1,7 @@
+{
+"client_id": "YOUR TWITCH CLIENT ID",
+"client_secret":  "YOUR TWITCH CLIENT SERVER",
+"irc_server": "irc.chat.twitch.tv:6667",
+
+"version": 1
+}

@@ -3,6 +3,7 @@ package twitch
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -24,8 +25,17 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 
 	switch {
 	case strings.HasPrefix(relPath, "utest"):
-		v := ah.UpdateViewers([]IrcNick{"kimau", "boo", "seriesofblues", "seriesofblurs"})
+		nickRawList := strings.Split(relPath, "/")
+		nickList := make([]IrcNick, len(nickRawList)-1, len(nickRawList)-1)
+		for i := 1; i < len(nickRawList); i++ {
+			nickList[i-1] = IrcNick(nickRawList[i])
+		}
+
+		v := ah.UpdateViewers(nickList)
 		fmt.Fprintf(w, "%#v", v)
+
+	case strings.HasPrefix(relPath, "chat"):
+		io.Copy(w, &ah.Chat.logBuffer)
 
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()
