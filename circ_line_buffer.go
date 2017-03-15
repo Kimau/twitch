@@ -1,6 +1,7 @@
 package twitch
 
 import "errors"
+import "fmt"
 
 // Optimised for Writing and frequent small reads
 // Reading the entire buffer is a bugger for perf
@@ -8,6 +9,7 @@ import "errors"
 type circLineBuffer struct {
 	size        int
 	bufHalfSize int
+	cursorOff   int // Read Cursor for Partial Reads or only newest
 	readOff     int // Read Offset aligned to nearest end of line
 	writeOff    int // Write Offset aligned to nearest end of line
 	buf         []byte
@@ -19,6 +21,9 @@ var (
 
 	// ErrWriteTooBig - Can only write half the size of CLB
 	ErrWriteTooBig = errors.New("Cannot write more than half the size")
+
+	// ErrBuffTooSmallForLine - Cannot read entire line into buffer
+	ErrBuffTooSmallForLine = errors.New("Cannot read entire line into buffer")
 )
 
 func makeCircLineBuffer(bufsize int) *circLineBuffer {
@@ -29,9 +34,17 @@ func makeCircLineBuffer(bufsize int) *circLineBuffer {
 		buf:         make([]byte, bufsize, bufsize),
 		readOff:     0,
 		writeOff:    0,
+		cursorOff:   0,
 	}
 
 	return clb
+}
+
+func (clb *circLineBuffer) dec(pos *int) {
+	*pos--
+	if *pos < 0 {
+		*pos += clb.size
+	}
 }
 
 func (clb *circLineBuffer) inc(pos *int) {
@@ -39,6 +52,19 @@ func (clb *circLineBuffer) inc(pos *int) {
 	if *pos >= clb.size {
 		*pos -= clb.size
 	}
+}
+
+func (clb *circLineBuffer) crossed(pos int, start int, end int) bool {
+	pos -= start
+	if pos < 0 {
+		pos += clb.size
+	}
+	l := end - start
+	if l < 0 {
+		l += clb.size
+	}
+
+	return pos <= l
 }
 
 func (clb *circLineBuffer) Size() int {
@@ -108,14 +134,11 @@ func (clb *circLineBuffer) Write(p []byte) (n int, err error) {
 		return 0, ErrWriteTooBig
 	}
 
-	advanceRead := false
-
 	// Update Cursors
 	pos := clb.writeOff
 	endPos := clb.writeOff + wl
 	if endPos >= clb.size {
 		endPos -= clb.size
-		advanceRead = clb.readOff < endPos
 	}
 
 	// Do Actual Write
@@ -129,7 +152,7 @@ func (clb *circLineBuffer) Write(p []byte) (n int, err error) {
 	clb.writeOff = endPos
 
 	// Did we cross read head
-	if advanceRead || ((pos-clb.readOff) >= 0) != ((endPos-clb.readOff) > 0) {
+	if clb.crossed(clb.readOff, pos, endPos) {
 		clb.inc(&endPos)
 
 		// Advance 0 to avoid partial string
@@ -137,17 +160,31 @@ func (clb *circLineBuffer) Write(p []byte) (n int, err error) {
 			clb.buf[endPos] = 0 // Slight perf cost but saves a lot of headaches
 			clb.inc(&endPos)
 		}
-		clb.readOff = endPos
+
+		clb.readOff = endPos + 1
+
+		// Did we cross cursor head as well
+		if clb.crossed(clb.cursorOff, pos, endPos) {
+			clb.ResetCursor()
+		}
 	}
 
 	// fmt.Printf("%2d %2d - %v\n", clb.readOff, clb.writeOff, clb.buf)
 	return wl, nil
 }
 
-func (clb *circLineBuffer) Read(p []byte) (n int, err error) {
-	maxLen := len(p)
+func (clb *circLineBuffer) ResetCursor() {
+	clb.cursorOff = clb.readOff
+}
 
-	startPos := clb.readOff
+func (clb *circLineBuffer) Read(p []byte) (n int, err error) {
+	if clb.cursorOff == clb.writeOff {
+		return 0, nil
+	}
+
+	// Setup
+	maxLen := len(p)
+	startPos := clb.cursorOff
 	endPos := clb.writeOff
 
 	// Figure out Actual Read Length
@@ -155,15 +192,37 @@ func (clb *circLineBuffer) Read(p []byte) (n int, err error) {
 	if readLen < 0 {
 		readLen += clb.size
 	}
-	if maxLen < readLen {
-		endPos = startPos + maxLen
-		if endPos >= clb.size {
-			endPos -= clb.size
-		}
+
+	// Do full read
+	if maxLen >= readLen {
+		clb.readInteral(startPos, endPos-1, p)
+		clb.cursorOff = endPos
+		return readLen, nil
+	}
+
+	endPos = startPos + maxLen
+	if endPos >= clb.size {
+		endPos -= clb.size
+	}
+
+	// Wind back up to the last 0
+	for (clb.buf[endPos] != 0) && endPos > startPos {
+		clb.dec(&endPos)
+	}
+
+	readLen = endPos - startPos
+	if readLen < 0 {
+		readLen += clb.size
+	}
+
+	fmt.Println(startPos, endPos, readLen)
+
+	if readLen == 0 {
+		return 0, ErrBuffTooSmallForLine
 	}
 
 	// Update Cursor then Read
 	clb.readInteral(startPos, endPos, p)
-
+	clb.cursorOff = endPos + 1
 	return readLen, nil
 }
