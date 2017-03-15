@@ -478,6 +478,11 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// > @badges=<badges>;bits=<bits>;color=<color>;display-name=<display-name>;emotes=<emotes>;id=<id>;mod=<mod>;room-id=<room-id>;subscriber=<subscriber>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
 		// Trailing = <message>
 		// Param[0] channel
+		if m.Name == "jtv" {
+			c.Logf("* %s", m.Trailing())
+			return
+		}
+
 		v, err := c.viewers.FindViewer(IrcNick(m.Name))
 		if err != nil {
 			log.Printf("PRIV MSG ERROR [%s] not found\n%s", m.Name, err)

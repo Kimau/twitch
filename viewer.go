@@ -129,6 +129,10 @@ func (ah *Client) FindViewer(nick IrcNick) (*Viewer, error) {
 		return nil, err
 	}
 
+	if len(userList) == 0 {
+		return nil, fmt.Errorf("No user found called: %s", nick)
+	}
+
 	return ah.CreateViewerFromUser(userList[0]), nil
 }
 
