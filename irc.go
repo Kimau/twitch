@@ -1,7 +1,6 @@
 package twitch
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -52,7 +51,7 @@ type Chat struct {
 	nameReplyList   []IrcNick
 
 	msgLogger *log.Logger
-	logBuffer bytes.Buffer
+	logBuffer circLineBuffer
 
 	viewers viewerProvider
 	irc     *irc.Client
@@ -159,58 +158,22 @@ func (c *Chat) nowHosting(target *Viewer) {
 	c.mode.hosting = target
 
 	if target == nil {
-		c.Logf("* No longer hosting.")
+		c.Logf(LogCatSystem, "No longer hosting.")
 	} else {
-		c.Logf("* Now Hosting %s", target.User.DisplayName)
+		c.Logf(LogCatSystem, "Now Hosting %s", target.User.DisplayName)
 	}
 }
 
 func (c *Chat) clearChat(m *irc.Message) {
 	// TODO :: Check it's this channel
-
 	nickToClear := m.Trailing()
-
-	newMsg := bytes.Buffer{}
-	for fullS, e := c.logBuffer.ReadString('\n'); e == nil; fullS, e = c.logBuffer.ReadString('\n') {
-		if !strings.HasPrefix(fullS, "IRC:") {
-			fmt.Fprint(&newMsg, fullS)
-			continue
-		}
-
-		t := fullS[:14]
-		s := fullS[14:]
-
-		switch s[0:1] {
-		case "*":
-			fmt.Fprint(&newMsg, fullS)
-		case "_":
-			fmt.Fprint(&newMsg, fullS)
-		case "#":
-			if len(s) < 4 {
-				fmt.Fprint(&newMsg, fullS)
-				continue
-			}
-
-			nick := s[2 : strings.Index(s[3:], " ")+3]
-			if nick == nickToClear {
-				fmt.Fprintf(&newMsg, "%s_ %s", t, s)
-			} else {
-				fmt.Fprint(&newMsg, fullS)
-			}
-		default:
-			fmt.Fprint(&newMsg, fullS)
-		}
-	}
-
-	c.logBuffer.Reset()
-	c.logBuffer = newMsg
 
 	// Log Ban Reason
 	r, ok := m.Tags[TwitchTagBanReason]
 	if ok {
-		c.Logf("_ Cleared %s from chat: %s", nickToClear, r)
+		c.Logf(LogCatSilent, "Cleared %s from chat: %s", nickToClear, r)
 	} else {
-		c.Logf("_ Cleared %s from chat", nickToClear)
+		c.Logf(LogCatSilent, "Cleared %s from chat", nickToClear)
 	}
 }
 
@@ -289,7 +252,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	switch m.Command {
 	case IrcReplyWelcome: // 001 is a welcome event, so we join channels there
-		c.Log("Respond to Welcome")
+		c.Log(LogCatSilent, "Respond to Welcome")
 		c.respondToWelcome(m)
 
 		// Message of the Day
@@ -351,7 +314,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		cu := &Chatter{}
 		cu.updateChatterFromTags(m)
 		v := c.viewers.GetViewerFromChatter(cu)
-		c.Logf("_ Global User State for %s", v.GetNick())
+		c.Logf(LogCatSilent, "Global User State for %s", v.GetNick())
 
 	case TwitchCmdRoomState:
 		for tagName, tagVal := range m.Tags {
@@ -406,13 +369,13 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 		chatChanName := m.Trailing()
-		c.Logf("* %s updated: %s", chatChanName, c.mode)
+		c.Logf(LogCatSystem, "%s updated: %s", chatChanName, c.mode)
 
 	case TwitchCmdUserNotice:
 		cu := &Chatter{}
 		cu.updateChatterFromTags(m)
 		c.viewers.GetViewerFromChatter(cu)
-		c.Logf("* %s", m.Tags[TwitchTagSystemMsg])
+		c.Logf(LogCatSystem, "%s", m.Tags[TwitchTagSystemMsg])
 
 	case TwitchCmdUserState:
 		cu := &Chatter{}
@@ -420,7 +383,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		v := c.viewers.GetViewerFromChatter(cu)
 
 		c.InRoom[v.GetNick()] = v
-		c.Logf("* User State updated from %s in %s", v.GetNick(), m.Trailing())
+		c.Logf(LogCatSystem, "User State updated from %s in %s", v.GetNick(), m.Trailing())
 
 	case TwitchCmdHostTarget:
 		match := regexHostName.FindStringSubmatch(m.Trailing())
@@ -503,7 +466,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 		// Output
 		// # 111111 S10 nick emote
-		c.Logf("# %s %s %s %s %s: %s",
+		c.Logf(LogCatMsg, "%s %s %s %s %s: %s",
 			v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
 			m.Trailing())
 
@@ -515,7 +478,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 		switch msgID {
 		case TwitchMsgHostOffline:
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 			c.nowHosting(nil)
 
 		case TwitchMsgHostOff:
@@ -533,45 +496,45 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 		case TwitchMsgR9kOff:
 			c.mode.r9k = false
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 		case TwitchMsgR9kOn:
 			c.mode.r9k = true
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 		case TwitchMsgSlowOff:
 			c.mode.slowMode = false
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 		case TwitchMsgSlowOn:
 			c.mode.slowMode = true
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 		case TwitchMsgSubsOff:
 			c.mode.subsOnly = false
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 		case TwitchMsgSubsOn:
 			c.mode.subsOnly = true
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 
 		case TwitchMsgEmoteOnlyOff:
 			c.mode.emoteOnly = false
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 		case TwitchMsgEmoteOnlyOn:
 			c.mode.emoteOnly = true
-			c.Log("* " + m.Trailing())
+			c.Log(LogCatSystem, m.Trailing())
 
 		case TwitchMsgAlreadyEmoteOnlyOff:
-			c.Log("_ MODE ALREADY SET: " + m.Trailing())
+			c.Log(LogCatSilent, "MODE ALREADY SET: "+m.Trailing())
 		case TwitchMsgAlreadyEmoteOnlyOn:
-			c.Log("_ MODE ALREADY SET: " + m.Trailing())
+			c.Log(LogCatSilent, "MODE ALREADY SET: "+m.Trailing())
 		case TwitchMsgAlreadyR9kOff:
-			c.Log("_ MODE ALREADY SET: " + m.Trailing())
+			c.Log(LogCatSilent, "MODE ALREADY SET: "+m.Trailing())
 		case TwitchMsgAlreadyR9kOn:
-			c.Log("_ MODE ALREADY SET: " + m.Trailing())
+			c.Log(LogCatSilent, "MODE ALREADY SET: "+m.Trailing())
 		case TwitchMsgAlreadySubsOff:
-			c.Log("_ MODE ALREADY SET: " + m.Trailing())
+			c.Log(LogCatSilent, "MODE ALREADY SET: "+m.Trailing())
 		case TwitchMsgAlreadySubsOn:
-			c.Log("_ MODE ALREADY SET: " + m.Trailing())
+			c.Log(LogCatSilent, "MODE ALREADY SET: "+m.Trailing())
 
 		case TwitchMsgUnrecognizedCmd:
-			c.Log("_ " + m.Trailing())
+			c.Log(LogCatSilent, m.Trailing())
 
 		/*
 			case 		 TwitchMsgAlreadyBanned      :

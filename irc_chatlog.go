@@ -16,7 +16,8 @@ type LogCat string
 //
 const (
 	LogCatSystem   LogCat = "*"
-	LogCatFiltered LogCat = "_"
+	LogCatSilent   LogCat = "_"
+	LogCatFiltered LogCat = "~"
 	LogCatMsg      LogCat = "#"
 	LogCatUnknown  LogCat = "!!?"
 )
@@ -35,20 +36,20 @@ type LogLineParsed struct {
 
 //
 var (
-	regexLogMsg = regexp.MustCompile("^IRC: ([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([\\*\\_]*) (.*)")
+	regexLogMsg = regexp.MustCompile("^IRC: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) *([\\*\\_]*) +(.*)")
 	// # TwitchID badge nick {emoteString}? [bitString]? : body
-	regexPrivMsg = regexp.MustCompile("# ([[:word:]]+) ([[:word:]]+) ([[:word:]]+) (\\{[[:word:]]+\\})? (\\[[[:word:]]+\\])? : (.*)")
+	regexPrivMsg = regexp.MustCompile("#([[:word:]]+) ([[:word:]]+) ([[:word:]]+) (\\{[[:word:]]+\\})? (\\[[[:word:]]+\\])? : (.*)")
 )
 
 // Log - Log to internal message logger
-func (c *Chat) Log(s string) {
+func (c *Chat) Log(lvl LogCat, s string) {
 	s = strings.Replace(strings.Replace(s, "\\", "\\\\", -1), "\n", "\\n", -1)
-	c.msgLogger.Print(s)
+	c.msgLogger.Print(string(lvl) + s)
 }
 
 // Logf - FMT interface
-func (c *Chat) Logf(s string, v ...interface{}) {
-	c.Log(fmt.Sprintf(s, v...))
+func (c *Chat) Logf(lvl LogCat, s string, v ...interface{}) {
+	c.Log(lvl, fmt.Sprintf(s, v...))
 }
 
 // ParseLog - Parse a Log Line useful for inspection
@@ -77,6 +78,10 @@ func (c *Chat) ParseLog(fullS string) (*LogLineParsed, error) {
 Reprocess:
 	switch LogCat(bodyText[0:1]) {
 	case LogCatSystem:
+		llp.Cat = LogCatSystem
+		llp.Body = bodyText[2:]
+
+	case LogCatSilent:
 		llp.Cat = LogCatSystem
 		llp.Body = bodyText[2:]
 

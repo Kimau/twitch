@@ -1,7 +1,10 @@
 package twitch
 
-import "errors"
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"unicode/utf8"
+)
 
 // Optimised for Writing and frequent small reads
 // Reading the entire buffer is a bugger for perf
@@ -118,6 +121,27 @@ func (clb *circLineBuffer) Bytes() []byte {
 
 func (clb *circLineBuffer) String() string {
 	return string(clb.Bytes())
+}
+
+func (clb *circLineBuffer) NextLine() string {
+	if clb.cursorOff == clb.writeOff {
+		return ""
+	}
+
+	retString := ""
+	byteChunk := []byte{}
+	for c := clb.buf[clb.cursorOff]; c != 0; clb.inc(&clb.cursorOff) {
+		if len(byteChunk) > 0 && utf8.RuneStart(c) {
+			retString += string(byteChunk)
+			byteChunk = []byte{c}
+		} else {
+			byteChunk = append(byteChunk, c)
+		}
+	}
+	retString += string(byteChunk)
+
+	clb.inc(&clb.cursorOff)
+	return retString
 }
 
 func (clb *circLineBuffer) Reset() {
