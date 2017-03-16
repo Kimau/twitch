@@ -306,31 +306,32 @@ const (
 
 // Twitch Msg ID Tages
 const (
-	TwitchMsgAlreadyBanned       = "already_banned"         // <user> is already banned in this room.
-	TwitchMsgAlreadyEmoteOnlyOff = "already_emote_only_off" // This room is not in emote-only mode.
-	TwitchMsgAlreadyEmoteOnlyOn  = "already_emote_only_on"  // This room is already in emote-only mode.
-	TwitchMsgAlreadyR9kOff       = "already_r9k_off"        // This room is not in r9k mode.
-	TwitchMsgAlreadyR9kOn        = "already_r9k_on"         // This room is already in r9k mode.
-	TwitchMsgAlreadySubsOff      = "already_subs_off"       // This room is not in subscribers-only mode.
-	TwitchMsgAlreadySubsOn       = "already_subs_on"        // This room is already in subscribers-only mode.
-	TwitchMsgBadHostHosting      = "bad_host_hosting"       // This channel is hosting <channel>.
-	TwitchMsgBadUnbanNoBan       = "bad_unban_no_ban"       // <user> is not banned from this room.
-	TwitchMsgBanSuccess          = "ban_success"            // <user> is banned from this room.
-	TwitchMsgEmoteOnlyOff        = "emote_only_off"         // This room is no longer in emote-only mode.
-	TwitchMsgEmoteOnlyOn         = "emote_only_on"          // This room is now in emote-only mode.
-	TwitchMsgHostOff             = "host_off"               // Exited host mode.
-	TwitchMsgHostOn              = "host_on"                // Now hosting <channel>.
-	TwitchMsgHostsRemaining      = "hosts_remaining"        // There are <number> host commands remaining this half hour.
-	TwitchMsgMsgChannelSuspended = "msg_channel_suspended"  // This channel is suspended.
-	TwitchMsgR9kOff              = "r9k_off"                // This room is no longer in r9k mode.
-	TwitchMsgR9kOn               = "r9k_on"                 // This room is now in r9k mode.
-	TwitchMsgSlowOff             = "slow_off"               // This room is no longer in slow mode.
-	TwitchMsgSlowOn              = "slow_on"                // This room is now in slow mode. You may send messages every <slow seconds> seconds.
-	TwitchMsgSubsOff             = "subs_off"               // This room is no longer in subscribers-only mode.
-	TwitchMsgSubsOn              = "subs_on"                // This room is now in subscribers-only mode.
-	TwitchMsgTimeoutSuccess      = "timeout_success"        // <user> has been timed out for <duration> seconds.
-	TwitchMsgUnbanSuccess        = "unban_success"          // <user> is no longer banned from this chat room.
-	TwitchMsgUnrecognizedCmd     = "unrecognized_cmd"       // Unrecognized command: <command>
+	TwitchMsgAlreadyBanned       = "already_banned"           // <user> is already banned in this room.
+	TwitchMsgAlreadyEmoteOnlyOff = "already_emote_only_off"   // This room is not in emote-only mode.
+	TwitchMsgAlreadyEmoteOnlyOn  = "already_emote_only_on"    // This room is already in emote-only mode.
+	TwitchMsgAlreadyR9kOff       = "already_r9k_off"          // This room is not in r9k mode.
+	TwitchMsgAlreadyR9kOn        = "already_r9k_on"           // This room is already in r9k mode.
+	TwitchMsgAlreadySubsOff      = "already_subs_off"         // This room is not in subscribers-only mode.
+	TwitchMsgAlreadySubsOn       = "already_subs_on"          // This room is already in subscribers-only mode.
+	TwitchMsgBadHostHosting      = "bad_host_hosting"         // This channel is hosting <channel>.
+	TwitchMsgBadUnbanNoBan       = "bad_unban_no_ban"         // <user> is not banned from this room.
+	TwitchMsgBanSuccess          = "ban_success"              // <user> is banned from this room.
+	TwitchMsgEmoteOnlyOff        = "emote_only_off"           // This room is no longer in emote-only mode.
+	TwitchMsgEmoteOnlyOn         = "emote_only_on"            // This room is now in emote-only mode.
+	TwitchMsgHostOff             = "host_off"                 // Exited host mode.
+	TwitchMsgHostOn              = "host_on"                  // Now hosting <channel>.
+	TwitchMsgHostsRemaining      = "hosts_remaining"          // There are <number> host commands remaining this half hour.
+	TwitchMsgHostOffline         = "host_target_went_offline" // The channel your hosting went offline
+	TwitchMsgMsgChannelSuspended = "msg_channel_suspended"    // This channel is suspended.
+	TwitchMsgR9kOff              = "r9k_off"                  // This room is no longer in r9k mode.
+	TwitchMsgR9kOn               = "r9k_on"                   // This room is now in r9k mode.
+	TwitchMsgSlowOff             = "slow_off"                 // This room is no longer in slow mode.
+	TwitchMsgSlowOn              = "slow_on"                  // This room is now in slow mode. You may send messages every <slow seconds> seconds.
+	TwitchMsgSubsOff             = "subs_off"                 // This room is no longer in subscribers-only mode.
+	TwitchMsgSubsOn              = "subs_on"                  // This room is now in subscribers-only mode.
+	TwitchMsgTimeoutSuccess      = "timeout_success"          // <user> has been timed out for <duration> seconds.
+	TwitchMsgUnbanSuccess        = "unban_success"            // <user> is no longer banned from this chat room.
+	TwitchMsgUnrecognizedCmd     = "unrecognized_cmd"         // Unrecognized command: <command>
 )
 
 // Twitch Tags

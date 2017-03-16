@@ -210,7 +210,9 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 }
 
 func (ah *Client) startNewChat() {
-	logFile, err := os.OpenFile("chat.log", os.O_CREATE|os.O_APPEND, os.ModePerm)
+	logFile, err := os.OpenFile(
+		fmt.Sprintf("%s_chat.log", ah.AdminAuth.token.Username),
+		os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
 		log.Fatal("Shouldn't fail to create chat log")
 	}

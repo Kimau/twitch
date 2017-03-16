@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"regexp"
@@ -29,8 +28,6 @@ var (
 	flagIrcPerformFile = flag.String("performfile", "", "Load File and perform on load")
 
 	regexHostName = regexp.MustCompile(" ([a-z_]+)\\.$")
-	regexLogMsg   = regexp.MustCompile("^IRC: ([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([\\*\\_]*) (.*)")
-	regexPrivMsg  = regexp.MustCompile("([^ ]*) ([[:word:]]+) (B([0-9]+))?(\\[([0-9]+)\\])?(\\{(([0-9]+),([0-9]+),([0-9]+)|)+\\})?: (.*)")
 	regexHostMsg  = regexp.MustCompile("([[:word:]]+)\\.")
 
 	ignoreMsgCmd = map[string]bool{
@@ -48,7 +45,6 @@ type Chat struct {
 	config  irc.ClientConfig
 	limiter *rate.Limiter
 
-	self   *Chatter
 	mode   chatMode
 	InRoom map[IrcNick]*Viewer
 
@@ -150,35 +146,6 @@ func (c *Chat) WriteRawIrcMsg(msg string) {
 	}
 }
 
-// Log - Log to internal message logger
-func (c *Chat) Log(s string) {
-	s = strings.Replace(strings.Replace(s, "\\", "\\\\", -1), "\n", "\\n", -1)
-	c.msgLogger.Print(s)
-}
-
-// Logf - FMT interface
-func (c *Chat) Logf(s string, v ...interface{}) {
-	c.Log(fmt.Sprintf(s, v...))
-}
-
-// SetupLogWriter - Set where the log is written to
-func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
-	c.logBuffer.Reset()
-	if newTarget != nil {
-		writeList := append(newTarget, &c.logBuffer)
-		mw := io.MultiWriter(writeList...)
-		c.msgLogger = log.New(mw, "IRC: ", log.Ltime)
-	} else {
-		c.msgLogger = log.New(&c.logBuffer, "IRC: ", log.Ltime)
-	}
-
-	if c.msgLogger == nil {
-		log.Fatalln("Log shouldn't be null")
-	}
-
-	c.Logf("+------------ New Log ------------+ %s", time.Now())
-}
-
 func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.InRoom = make(map[IrcNick]*Viewer)
 
@@ -218,7 +185,7 @@ func (c *Chat) clearChat(m *irc.Message) {
 			fmt.Fprint(&newMsg, fullS)
 		case "_":
 			fmt.Fprint(&newMsg, fullS)
-		default:
+		case "#":
 			if len(s) < 4 {
 				fmt.Fprint(&newMsg, fullS)
 				continue
@@ -230,6 +197,8 @@ func (c *Chat) clearChat(m *irc.Message) {
 			} else {
 				fmt.Fprint(&newMsg, fullS)
 			}
+		default:
+			fmt.Fprint(&newMsg, fullS)
 		}
 	}
 
@@ -478,7 +447,16 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// > @badges=<badges>;bits=<bits>;color=<color>;display-name=<display-name>;emotes=<emotes>;id=<id>;mod=<mod>;room-id=<room-id>;subscriber=<subscriber>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :<message>
 		// Trailing = <message>
 		// Param[0] channel
-		if m.Name == "jtv" {
+
+		// SPECIAL CASES because twitch
+		switch m.Name {
+		case "jtv":
+			// TODO :: Add reaction hook
+			c.Logf("* %s", m.Trailing())
+			return
+		case "twitchnotify":
+			// TODO :: Add reaction hook
+			// Sub notify [[:word:]] just subscribed to [[:word:]]
 			c.Logf("* %s", m.Trailing())
 			return
 		}
@@ -496,38 +474,38 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 		v.Chatter.updateChatterFromTags(m)
 
-		finalText := v.Chatter.NameWithBadge()
+		// Priority Badge
+		singleBadge := v.Chatter.SingleBadge()
 
 		// Handle Bits
+		bitString := ""
 		bits, ok := m.Tags[TwitchTagBits]
 		if ok {
 			bVal, err := strconv.Atoi(string(bits))
 			if err != nil {
 				log.Print("Bits error -", m, err)
 			} else {
-				finalText += fmt.Sprintf("[%d]", bVal)
+				bitString = fmt.Sprintf("[%d]", bVal)
 			}
 		}
 
 		// Handle Emotes
+		emoteString := ""
 		emoteList, ok := m.Tags[TwitchTagMsgEmotes]
 		if ok {
 			el, err := emoteTagToList(emoteList)
 			if err != nil {
 				log.Printf("Unable to parse Emote Tag [%s]\n%s", emoteList, err)
 			} else if len(el) > 0 {
-				finalText += fmt.Sprintf("{%s}", el)
+				emoteString = fmt.Sprintf("{%s}", el)
 			}
 		}
 
-		// Padding before
-		finalText = fmt.Sprintf("%-14s", finalText)
-
-		// Add Text
-		finalText += ": " + m.Trailing()
-
 		// Output
-		c.Log(finalText)
+		// # 111111 S10 nick emote
+		c.Logf("# %s %s %s %s %s: %s",
+			v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
+			m.Trailing())
 
 	case IrcCmdNotice:
 		msgID, ok := m.Tags[TwitchTagMsgID]
@@ -536,6 +514,10 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 		switch msgID {
+		case TwitchMsgHostOffline:
+			c.Log("* " + m.Trailing())
+			c.nowHosting(nil)
+
 		case TwitchMsgHostOff:
 			c.nowHosting(nil)
 

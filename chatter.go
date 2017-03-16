@@ -160,8 +160,8 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 	return cu
 }
 
-// NameWithBadge - Outputs Name with Badge data enc in front
-func (cu *Chatter) NameWithBadge() string {
+// SingleBadge - Outputs Badge to Display based on priority
+func (cu *Chatter) SingleBadge() string {
 	// Only add one of these badges
 	r := "."
 	for _, v := range [][]string{
@@ -201,8 +201,8 @@ func (cu *Chatter) NameWithBadge() string {
 	// Badge Bits
 	b, ok := cu.Badges[TwitchBadgeBits]
 	if ok {
-		return fmt.Sprintf("%s %s B%d", r, cu.Nick, b)
+		return fmt.Sprintf("%sB%d", r, b)
 	}
 
-	return fmt.Sprintf("%s %s", r, cu.Nick)
+	return fmt.Sprintf("%s %s", r)
 }
