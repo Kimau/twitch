@@ -86,6 +86,7 @@ const (
 	IrcCmdIson     = "ISON"
 	IrcCmdServer   = "SERVER"
 	IrcCmdNjoin    = "NJOIN"
+	IrcCmdAction   = "CTCP"
 )
 
 // Numeric IRC replies extracted from RFC2812 section 5.

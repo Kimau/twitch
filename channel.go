@@ -19,7 +19,7 @@ import "fmt"
 
 // Channel - Channel Data
 type Channel struct {
-	ID          string `json:"_id"`
+	ID          int    `json:"_id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`
 
@@ -27,8 +27,8 @@ type Channel struct {
 
 	Game               string `json:"game,omitempty"`                            // : "Final Fantasy XV"
 	Language           string `json:"language,omitempty"`                        // : "en"
-	Mature             string `json:"mature,omitempty"`                          // : true
-	Partner            string `json:"partner,omitempty"`                         // : false
+	Mature             bool   `json:"mature,omitempty"`                          // : true
+	Partner            bool   `json:"partner,omitempty"`                         // : false
 	ProfileBanner      string `json:"profile_banner,omitempty"`                  // : null
 	ProfileBannerColor string `json:"profile_banner_background_color,omitempty"` // : null
 	Status             string `json:"status,omitempty"`                          // : "The Finalest of Fantasies"
@@ -90,9 +90,9 @@ func (c *ChannelsMethod) GetMe() (*ChannelFull, error) {
 }
 
 // Get - Get Channel by ID
-func (c *ChannelsMethod) Get(id string) (*Channel, error) {
+func (c *ChannelsMethod) Get(id ID) (*Channel, error) {
 	var channel Channel
-	_, err := c.client.Get(c.au, "channels/"+id, &channel)
+	_, err := c.client.Get(c.au, fmt.Sprintf("channels/%s", id), &channel)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (c *ChannelsMethod) Get(id string) (*Channel, error) {
 }
 
 // GetEditors - Return list of users allow to edit the channel
-func (c *ChannelsMethod) GetEditors(id string) ([]User, error) {
+func (c *ChannelsMethod) GetEditors(id ID) ([]User, error) {
 	err := c.au.checkScope(scopeChannelRead)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func (c *ChannelsMethod) GetEditors(id string) ([]User, error) {
 }
 
 // GetFollowers - Returns the Followers for a Channel
-func (c *ChannelsMethod) GetFollowers(id string, limit int, newestFirst bool) ([]ChannelFollow, int, error) {
+func (c *ChannelsMethod) GetFollowers(id ID, limit int, newestFirst bool) ([]ChannelFollow, int, error) {
 
 	reqPageLimit := limit
 	if limit < 0 {
@@ -148,13 +148,17 @@ func (c *ChannelsMethod) GetFollowers(id string, limit int, newestFirst bool) ([
 	compiledList := []ChannelFollow{}
 
 	offset := 0
-	for offset < limit {
+	for limit < 0 || offset < limit {
 
 		_, err := c.client.Get(c.au,
-			fmt.Sprintf("channels/%s/follows?limit=%d&offset=%ds&direction=%s",
+			fmt.Sprintf("channels/%s/follows?limit=%d&offset=%d&direction=%s",
 				id, reqPageLimit, offset, reqOrder), &followList)
 		if err != nil {
 			return compiledList, followList.Total, err
+		}
+
+		if limit < 0 {
+			limit = followList.Total
 		}
 
 		compiledList = append(compiledList, followList.Follows...)

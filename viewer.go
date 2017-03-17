@@ -212,3 +212,22 @@ func (vw *Viewer) UpdateFollowStatus() (bool, error) {
 	vw.Follower = cFollow
 	return (vw.Follower != nil), nil
 }
+
+// UpdateFollowers - Update all the channels followers
+func (ah *Client) UpdateFollowers() (int, error) {
+	hostChan, err := ah.FindViewer(IrcNick(ah.Chat.Room))
+
+	followers, numFollowers, err := ah.Channel.GetFollowers(hostChan.TwitchID, -1, true)
+
+	for _, f := range followers {
+		v, ok := ah.Viewers[f.User.ID]
+		if !ok {
+			v = ah.CreateViewerFromUser(*f.User)
+		}
+
+		v.User = f.User
+		v.Follower = &f
+	}
+
+	return numFollowers, err
+}

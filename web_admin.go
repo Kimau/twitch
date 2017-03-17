@@ -49,6 +49,10 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		fmt.Fprintf(w, "%#v", uf)
 
+	case strings.HasPrefix(relPath, "updateFollowers"):
+		numFollowers, err := ah.UpdateFollowers()
+		fmt.Fprintf(w, "Followers: %d \n %s", numFollowers, err.Error())
+
 	case strings.HasPrefix(relPath, "user"):
 		userName := regexp.MustCompile("username/([\\w]+)/*")
 		r := userName.FindStringSubmatch(relPath)

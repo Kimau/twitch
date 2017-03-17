@@ -82,11 +82,14 @@ type Client struct {
 
 	Chat *Chat
 
+	ViewCount []int
+
 	Viewers       map[ID]*Viewer
 	PendingLogins map[authInternalState]time.Time
 
 	User    *UsersMethod
 	Channel *ChannelsMethod
+	Stream  *StreamsMethod
 }
 
 // CreateTwitchClient -
@@ -112,6 +115,7 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string) (*Client, 
 
 	kb.User = &UsersMethod{client: &kb, au: kb.AdminAuth}
 	kb.Channel = &ChannelsMethod{client: &kb, au: kb.AdminAuth}
+	kb.Stream = &StreamsMethod{client: &kb, au: kb.AdminAuth}
 
 	return &kb, nil
 }
@@ -207,6 +211,42 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 	}
 
 	return "", err
+}
+
+func (ah *Client) adminHasAuthed() {
+	ah.AdminChannel <- 1
+
+	if ah.AdminAuth.Scopes[scopeChatLogin] {
+		go ah.startNewChat()
+	}
+
+	go ah.monitorHeartbeat()
+}
+
+func (ah *Client) monitorHeartbeat() {
+	ircRoomToJoin := IrcNick(*flagIrcChannel)
+	if len(ircRoomToJoin) < 2 {
+		ircRoomToJoin = ah.GetNick()
+	}
+
+	v, _ := ah.FindViewer(ircRoomToJoin)
+
+	updateBeat := func(t time.Time) {
+		sb, err := ah.Stream.GetStreamByUser(v.TwitchID)
+		if err != nil || sb == nil {
+			fmt.Printf("Heartbeart %s: NOT LIVE %s\n", t, v.GetNick())
+		} else {
+			fmt.Printf("Heartbeat %s: %5d %s | %s\n", t, sb.Viewers, sb.Game, sb.Channel.Status)
+			ah.ViewCount = append(ah.ViewCount, sb.Viewers)
+		}
+	}
+
+	updateBeat(time.Now())
+
+	tBeat := time.NewTicker(time.Minute * 5)
+	for ts := range tBeat.C {
+		updateBeat(ts)
+	}
 }
 
 func (ah *Client) startNewChat() {

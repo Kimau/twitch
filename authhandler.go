@@ -131,15 +131,11 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	tID := authU.token.UserID
 	if isAdmin {
 		if ah.AdminAuth.token != nil {
-			ah.AdminChannel <- 1
+			ah.adminHasAuthed()
+
 			fmt.Fprintf(w, "Admin logged in %s #%s\n---Scope---\n\t%s\n---------\n",
 				authU.token.Username, tID,
 				strings.Join(scopeList, "\n\t"))
-
-			if ah.AdminAuth.Scopes[scopeChatLogin] {
-				go ah.startNewChat()
-			}
-
 		} else {
 			http.Error(w, "Admin Auth has no token", 400)
 		}

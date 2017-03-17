@@ -429,6 +429,8 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// printDebugTag(m)
 		// TODO :: Handle Mode
 
+	case IrcCmdAction:
+		fallthrough
 	case IrcCmdPrivmsg:
 		// < PRIVMSG #<channel> :This is a sample message
 		// > :<user>!<user>@<user>.tmi.twitch.tv PRIVMSG #<channel> :This is a sample message
@@ -492,9 +494,18 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 		// Output
 		// # 111111 S10 nick emote
-		c.Logf(LogCatMsg, "%s %s %s %s %s: %s",
-			v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
-			m.Trailing())
+		msgBody := m.Trailing()
+		if strings.HasPrefix(msgBody, "ACTION") {
+			msgBody = strings.TrimLeft(msgBody, "ACTION")
+
+			c.Logf(LogCatAction, "%s %s %s %s %s: %s",
+				v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
+				msgBody)
+		} else {
+			c.Logf(LogCatMsg, "%s %s %s %s %s: %s",
+				v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
+				msgBody)
+		}
 
 	case IrcCmdNotice:
 		msgID, ok := m.Tags[TwitchTagMsgID]

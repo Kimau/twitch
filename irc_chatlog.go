@@ -19,6 +19,7 @@ const (
 	LogCatSilent   LogCat = '_'
 	LogCatFiltered LogCat = '~'
 	LogCatMsg      LogCat = '#'
+	LogCatAction   LogCat = '!'
 	LogCatUnknown  LogCat = '?'
 )
 
@@ -38,7 +39,7 @@ type LogLineParsed struct {
 var (
 	regexLogMsg = regexp.MustCompile("^IRC: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) *([\\*\\_]*) +(.*)")
 	// # TwitchID badge nick {emoteString}? [bitString]? : body
-	regexPrivMsg = regexp.MustCompile("#([[:word:]]+) ([[:word:]]+) ([[:word:]]+) (\\{[[:word:]]+\\})? (\\[[[:word:]]+\\])? : (.*)")
+	regexPrivMsg = regexp.MustCompile("[#!]([[:word:]]+) ([[:word:]]+) ([[:word:]]+) (\\{[[:word:]]+\\})? (\\[[[:word:]]+\\])? : (.*)")
 )
 
 // Log - Log to internal message logger
@@ -89,6 +90,13 @@ Reprocess:
 		llp.Filtered = true
 		bodyText = bodyText[2:]
 		goto Reprocess
+
+	case LogCatAction:
+		llp.Cat = LogCatMsg
+		subStrings := regexPrivMsg.FindStringSubmatch(bodyText)
+		if len(subStrings) == 7 {
+			return nil, fmt.Errorf("Failed basic message parse: %s", bodyText)
+		}
 
 	case LogCatMsg:
 		llp.Cat = LogCatMsg

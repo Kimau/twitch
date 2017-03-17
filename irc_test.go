@@ -69,6 +69,7 @@ var (
 		":skintrader_pl!skintrader_pl@skintrader_pl.tmi.twitch.tv PART #kimau",
 		":skintrader_pl!skintrader_pl@skintrader_pl.tmi.twitch.tv JOIN #kimau",
 		":skintrader_pl!skintrader_pl@skintrader_pl.tmi.twitch.tv PART #kimau",
+		"@display-name=CohhKittenBot;emotes;mod=1;room-id=26610234;tmi-sent-ts=1489766625363;user-id=91400118;user-type=mod;badges=moderator/1,subscriber/12;color=#FF0000;id=5060a3e9-2d44-42c2-897a-07feb6db6edc;subscriber=1;turbo=0 :cohhkittenbot!cohhkittenbot@cohhkittenbot.tmi.twitch.tv CTCP #cohhcarnage :ACTION curls up for a nap",
 	}
 )
 
