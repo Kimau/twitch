@@ -58,6 +58,10 @@ func (clb *circLineBuffer) inc(pos *int) {
 }
 
 func (clb *circLineBuffer) crossed(pos int, start int, end int) bool {
+	if pos == start {
+		return false
+	}
+
 	pos -= start
 	if pos < 0 {
 		pos += clb.size
@@ -130,14 +134,25 @@ func (clb *circLineBuffer) NextLine() string {
 
 	retString := ""
 	byteChunk := []byte{}
-	for c := clb.buf[clb.cursorOff]; c != 0; clb.inc(&clb.cursorOff) {
+
+	c := clb.buf[clb.cursorOff]
+	if c == 0 {
+		clb.inc(&clb.cursorOff)
+		c = clb.buf[clb.cursorOff]
+	}
+
+	for c != 0 {
 		if len(byteChunk) > 0 && utf8.RuneStart(c) {
 			retString += string(byteChunk)
 			byteChunk = []byte{c}
 		} else {
 			byteChunk = append(byteChunk, c)
 		}
+
+		clb.inc(&clb.cursorOff)
+		c = clb.buf[clb.cursorOff]
 	}
+
 	retString += string(byteChunk)
 
 	clb.inc(&clb.cursorOff)

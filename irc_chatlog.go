@@ -11,15 +11,15 @@ import (
 )
 
 // LogCat - The Type of Log Category message
-type LogCat string
+type LogCat rune
 
 //
 const (
-	LogCatSystem   LogCat = "*"
-	LogCatSilent   LogCat = "_"
-	LogCatFiltered LogCat = "~"
-	LogCatMsg      LogCat = "#"
-	LogCatUnknown  LogCat = "!!?"
+	LogCatSystem   LogCat = '*'
+	LogCatSilent   LogCat = '_'
+	LogCatFiltered LogCat = '~'
+	LogCatMsg      LogCat = '#'
+	LogCatUnknown  LogCat = '?'
 )
 
 // LogLineParsed - Useful for Parsing Log Lines
@@ -76,7 +76,7 @@ func (c *Chat) ParseLog(fullS string) (*LogLineParsed, error) {
 	bodyText := sBits[4]
 
 Reprocess:
-	switch LogCat(bodyText[0:1]) {
+	switch LogCat(bodyText[0]) {
 	case LogCatSystem:
 		llp.Cat = LogCatSystem
 		llp.Body = bodyText[2:]
@@ -107,13 +107,14 @@ Reprocess:
 
 // SetupLogWriter - Set where the log is written to
 func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
+	c.logBuffer = makeCircLineBuffer(1024 * 1024 * 8)
 	c.logBuffer.Reset()
 	if newTarget != nil {
-		writeList := append(newTarget, &c.logBuffer)
+		writeList := append(newTarget, c.logBuffer)
 		mw := io.MultiWriter(writeList...)
 		c.msgLogger = log.New(mw, "IRC: ", log.Ltime)
 	} else {
-		c.msgLogger = log.New(&c.logBuffer, "IRC: ", log.Ltime)
+		c.msgLogger = log.New(c.logBuffer, "IRC: ", log.Ltime)
 	}
 
 	if c.msgLogger == nil {
@@ -121,6 +122,6 @@ func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
 	}
 
 	ts := time.Now().Format(time.RFC822Z)
-	c.Logf("+------------ New Log [%s] ------------+ %s",
+	c.Logf(LogCatSilent, "+------------ New Log [%s] ------------+ %s",
 		c.Room, ts)
 }

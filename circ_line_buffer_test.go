@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 )
@@ -63,4 +64,35 @@ func TestBufferLimit(t *testing.T) {
 		r, err = clb.Read(line)
 	}
 	t.Logf("END    %2d:%v", r, err)
+}
+
+func TestWriteRead(t *testing.T) {
+	clb := makeCircLineBuffer(120)
+
+	sArray := []string{
+		"10 Short",
+		"20 Test String",
+		"30 Longer Stringer",
+		"40 Longer String Pickle",
+	}
+
+	for loopTest := 0; loopTest < 10; loopTest++ {
+		for i, v := range sArray {
+			fmt.Fprint(clb, v)
+			t.Logf("%d C%3d R%3d W%3d", i, clb.cursorOff, clb.readOff, clb.writeOff)
+		}
+
+		for i, v := range sArray {
+			s := clb.NextLine()
+			t.Logf("%d C%3d R%3d W%3d", i, clb.cursorOff, clb.readOff, clb.writeOff)
+			if s != v {
+				t.Logf("No Match %d\n%s\n%s", i, s, v)
+				t.Fail()
+			}
+		}
+	}
+
+	clb.ResetCursor()
+	t.Log(clb)
+
 }

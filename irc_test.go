@@ -183,7 +183,6 @@ func TestIrcMessage(t *testing.T) {
 	}
 
 	chat.SetupLogWriter()
-	chat.msgLogger.Println("+------------ New Log ------------+")
 	chat.config.Handler = chat
 
 	ircClient := irc.NewClient(&DummyWriteRead{}, chat.config)
@@ -208,7 +207,9 @@ func TestIrcMessage(t *testing.T) {
 	}
 	lastM = ""
 
-	t.Log("\n_________________________\n", &chat.logBuffer)
+	t.Log("___________________________")
+	chat.logBuffer.ResetCursor()
+	t.Log(chat.logBuffer)
 }
 
 func TestEmoteTagProcessor(t *testing.T) {

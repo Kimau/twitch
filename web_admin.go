@@ -35,7 +35,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(w, "%#v", v)
 
 	case strings.HasPrefix(relPath, "chat"):
-		io.Copy(w, &ah.Chat.logBuffer)
+		io.Copy(w, ah.Chat.logBuffer)
 
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()

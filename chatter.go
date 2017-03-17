@@ -204,5 +204,5 @@ func (cu *Chatter) SingleBadge() string {
 		return fmt.Sprintf("%sB%d", r, b)
 	}
 
-	return fmt.Sprintf("%s %s", r)
+	return r
 }

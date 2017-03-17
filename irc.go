@@ -51,7 +51,7 @@ type Chat struct {
 	nameReplyList   []IrcNick
 
 	msgLogger *log.Logger
-	logBuffer circLineBuffer
+	logBuffer *circLineBuffer
 
 	viewers viewerProvider
 	irc     *irc.Client
@@ -245,7 +245,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 	printOut, ok := ignoreMsgCmd[m.Command]
 	if ok {
 		if printOut {
-			c.Logf("IRC [%s] \t %s", m.Command, m.Trailing())
+			c.Logf(LogCatSilent, "IGNORE %s \t %s", m.Command, m.Trailing())
 		}
 		return
 	}
@@ -263,7 +263,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.messageOfTheDay = append(c.messageOfTheDay, m.Trailing())
 
 	case IrcReplyEndofmotd:
-		c.Logf("_ MOTD %s", strings.Join(c.messageOfTheDay, "\n"))
+		c.Logf(LogCatSilent, "MOTD %s", strings.Join(c.messageOfTheDay, "\n"))
 		// End of Message of the Day
 
 	// Name List
@@ -278,7 +278,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 	case IrcReplyEndofnames:
 		c.processNameList()
 		nickformated := JoinNickComma(c.nameReplyList)
-		c.Logf("* Names: %s", nickformated)
+		c.Logf(LogCatSystem, "Names: %s", nickformated)
 		c.nameReplyList = nil
 		// End of Name List
 
@@ -292,7 +292,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			m.Trailing())
 
 	case IrcCmdJoin: // User Joined Channel
-		c.Logf("* Join %s", m.Name)
+		c.Logf(LogCatSystem, "Join %s", m.Name)
 		nick := IrcNick(m.Name)
 
 		v, err := c.viewers.FindViewer(nick)
@@ -304,7 +304,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.InRoom[nick] = v
 
 	case IrcCmdPart: // User Parted Channel
-		c.Logf("* Part %s", m.Name)
+		c.Logf(LogCatSystem, "Part %s", m.Name)
 		delete(c.InRoom, IrcNick(m.Name))
 
 	case TwitchCmdClearChat:
@@ -323,7 +323,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.followersOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.Logf("%s:%s \n%s", tagName, tagVal, err)
+					log.Printf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.followersOnly = true
 				}
@@ -332,7 +332,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.r9k = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.Logf("%s:%s \n%s", tagName, tagVal, err)
+					log.Printf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.r9k = true
 				}
@@ -340,7 +340,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.slowMode = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.Logf("%s:%s \n%s", tagName, tagVal, err)
+					log.Printf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.slowMode = true
 				}
@@ -348,7 +348,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.subsOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.Logf("%s:%s \n%s", tagName, tagVal, err)
+					log.Printf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.subsOnly = true
 				}
@@ -360,7 +360,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				c.mode.emoteOnly = false
 				intVal, err := strconv.Atoi(string(tagVal))
 				if err != nil {
-					c.Logf("%s:%s \n%s", tagName, tagVal, err)
+					log.Printf("%s:%s \n%s", tagName, tagVal, err)
 				} else if intVal > 0 {
 					c.mode.emoteOnly = true
 				}
@@ -415,12 +415,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		switch m.Name {
 		case "jtv":
 			// TODO :: Add reaction hook
-			c.Logf("* %s", m.Trailing())
+			c.Logf(LogCatSystem, "%s", m.Trailing())
 			return
 		case "twitchnotify":
 			// TODO :: Add reaction hook
 			// Sub notify [[:word:]] just subscribed to [[:word:]]
-			c.Logf("* %s", m.Trailing())
+			c.Logf(LogCatSystem, "%s", m.Trailing())
 			return
 		}
 
