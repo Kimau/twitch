@@ -319,8 +319,13 @@ func (ah *Client) monitorHeartbeat() {
 }
 
 func (ah *Client) startNewChat() {
+	ircRoomToJoin := *flagIrcChannel
+	if len(ircRoomToJoin) < 2 {
+		ircRoomToJoin = string(ah.AdminAuth.token.Username)
+	}
+
 	logFile, err := os.OpenFile(
-		fmt.Sprintf("%s_chat.log", ah.AdminAuth.token.Username),
+		fmt.Sprintf("%s_chat.log", ircRoomToJoin),
 		os.O_CREATE|os.O_APPEND, os.ModePerm)
 	if err != nil {
 		log.Fatal("Shouldn't fail to create chat log")
