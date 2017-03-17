@@ -204,7 +204,7 @@ func (vw *Viewer) UpdateUser() error {
 // UpdateFollowStatus - Update Follower Status
 func (vw *Viewer) UpdateFollowStatus() (bool, error) {
 
-	cFollow, err := vw.client.User.IsFollowing(vw.TwitchID, vw.client.AdminAuth.token.UserID)
+	cFollow, err := vw.client.User.IsFollowing(vw.TwitchID, vw.client.MyID)
 	if err != nil {
 		return false, err
 	}

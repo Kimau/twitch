@@ -1,6 +1,7 @@
 package twitch
 
 import "net/http"
+import "fmt"
 
 // ID - Numberic Identifier of Twitch Identity
 type ID string
@@ -47,3 +48,9 @@ const (
 	scopeUserRead                 = "user_read"                  // "user_read"                  - Read nonpublic user information, like email address.
 	scopeUserSubscriptions        = "user_subscriptions"         // "user_subscriptions"         - Read a user’s subscriptions.
 )
+
+// IDFromInt - Convert ID from int to string ID
+// Some older API return a number
+func IDFromInt(id int) ID {
+	return ID(fmt.Sprintf("%d", id))
+}

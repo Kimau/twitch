@@ -309,8 +309,8 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			m.Trailing())
 
 	case IrcCmdJoin: // User Joined Channel
-		c.Logf(LogCatSystem, "Join %s", c.Room)
 		nick := IrcNick(m.Name)
+		c.Logf(LogCatSystem, "Join %s", nick)
 
 		v, err := c.viewers.FindViewer(nick)
 		if err != nil {

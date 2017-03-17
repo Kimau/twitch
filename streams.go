@@ -1,7 +1,9 @@
 package twitch
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 )
 
 // GetStreamByUser     | Get Stream by User      | Gets stream information (the stream object) for a specified user.
@@ -35,6 +37,17 @@ type StreamBody struct {
 	CreatedAtString string `json:"created_at"` // 2013-06-03T19:12:02Z
 }
 
+// HostData - Host Instance
+type HostData struct {
+	HostID          int    `json:"host_id"`           //  649402
+	HostLogin       string `json:"host_login"`        //  groundz3r0
+	HostDisplayName string `json:"host_display_name"` //  GROUNDZ3R0
+
+	TargetID          int    `json:"target_id"`           //  259266
+	TargetLogin       string `json:"target_login"`        //  epicdarksparky
+	TargetDisplayName string `json:"target_display_name"` //  EpicDarkspark
+}
+
 // StreamsMethod - The functions for Streams
 type StreamsMethod struct {
 	client *Client
@@ -53,7 +66,31 @@ func (c *StreamsMethod) GetStreamByUser(id ID) (*StreamBody, error) {
 		return nil, err
 	}
 
+	if resp.Body.ResponseID == 0 {
+		return nil, fmt.Errorf("Not Streaming %d", id)
+	}
+
 	return &resp.Body, nil
+}
+
+// GetHostsByUser - Undocumented api to get hosts
+// WARNING :: Undocumented API
+func (c *StreamsMethod) GetHostsByUser(id ID) ([]HostData, error) {
+	hosts := struct {
+		HostList []HostData `json:"hosts"`
+	}{}
+
+	resp, err := http.Get(fmt.Sprintf("https://tmi.twitch.tv/hosts?include_logins=1&target=%s", id))
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&hosts)
+	if err != nil {
+		return nil, err
+	}
+
+	return hosts.HostList, nil
 }
 
 // func (c *StreamsMethod) GetLiveStreams() ([]*StreamBody, int, error) {}
