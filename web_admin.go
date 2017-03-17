@@ -3,7 +3,6 @@ package twitch
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -35,7 +34,9 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(w, "%#v", v)
 
 	case strings.HasPrefix(relPath, "chat"):
-		io.Copy(w, ah.Chat.logBuffer)
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprint(w, ah.Chat.logBuffer.String())
+		ah.Chat.logBuffer.ResetCursor()
 
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()

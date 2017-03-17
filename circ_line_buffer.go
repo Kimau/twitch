@@ -124,7 +124,17 @@ func (clb *circLineBuffer) Bytes() []byte {
 }
 
 func (clb *circLineBuffer) String() string {
-	return string(clb.Bytes())
+	b := clb.Bytes()
+	for i := len(b) - 1; i > 0; i-- {
+		if b[i] == 0 {
+			b[i] = '\n'
+			i--
+			if b[i] == '\n' {
+				b[i] = ' '
+			}
+		}
+	}
+	return string(b)
 }
 
 func (clb *circLineBuffer) NextLine() string {
@@ -154,6 +164,11 @@ func (clb *circLineBuffer) NextLine() string {
 	}
 
 	retString += string(byteChunk)
+
+	strL := len(retString)
+	if strL > 3 && retString[strL-1] == '\n' && retString[strL-2] == '\n' {
+		retString = retString[:strL-1]
+	}
 
 	clb.inc(&clb.cursorOff)
 	return retString
