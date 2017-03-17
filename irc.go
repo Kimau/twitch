@@ -95,6 +95,14 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 	return chat, nil
 }
 
+func (c *Chat) tickRoomActive(activeInRoomTicker *time.Ticker) {
+	for _ = range activeInRoomTicker.C {
+		for _, v := range c.InRoom {
+			v.Chatter.updateActive()
+		}
+	}
+}
+
 // StartRunLoop - Start Run Loop
 func (c *Chat) StartRunLoop() error {
 	conn, err := net.Dial("tcp", c.Server)
@@ -103,6 +111,9 @@ func (c *Chat) StartRunLoop() error {
 	}
 
 	c.irc = irc.NewClient(conn, c.config)
+
+	activeInRoomTicker := time.NewTicker(time.Minute * 5)
+	go c.tickRoomActive(activeInRoomTicker)
 
 	if c.verbose {
 		// In Verbose mode log all messages
@@ -129,6 +140,7 @@ func (c *Chat) StartRunLoop() error {
 		c.irc = nil
 	}
 
+	activeInRoomTicker.Stop()
 	return err
 }
 
@@ -236,6 +248,11 @@ func (c *Chat) processNameList() {
 
 	for _, v := range vList {
 		nick := v.GetNick()
+		if v.Chatter == nil {
+			v.Chatter = createChatter(nick, nil)
+		} else {
+			v.Chatter.updateActive()
+		}
 		c.InRoom[nick] = v
 	}
 }
@@ -292,7 +309,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			m.Trailing())
 
 	case IrcCmdJoin: // User Joined Channel
-		c.Logf(LogCatSystem, "Join %s", m.Name)
+		c.Logf(LogCatSystem, "Join %s", c.Room)
 		nick := IrcNick(m.Name)
 
 		v, err := c.viewers.FindViewer(nick)
@@ -302,17 +319,27 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 		c.InRoom[nick] = v
+		if v.Chatter == nil {
+			v.Chatter = createChatter(nick, m)
+		} else {
+			v.Chatter.updateActive()
+		}
 
 	case IrcCmdPart: // User Parted Channel
 		c.Logf(LogCatSystem, "Part %s", m.Name)
-		delete(c.InRoom, IrcNick(m.Name))
+
+		nick := IrcNick(m.Name)
+		v, ok := c.InRoom[nick]
+		if ok {
+			v.Chatter.updateActive()
+			delete(c.InRoom, nick)
+		}
 
 	case TwitchCmdClearChat:
 		c.clearChat(m)
 
 	case TwitchCmdGlobalUserState:
-		cu := &Chatter{}
-		cu.updateChatterFromTags(m)
+		cu := createChatter(IrcNick(m.Name), m)
 		v := c.viewers.GetViewerFromChatter(cu)
 		c.Logf(LogCatSilent, "Global User State for %s", v.GetNick())
 
@@ -372,14 +399,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.Logf(LogCatSystem, "%s updated: %s", chatChanName, c.mode)
 
 	case TwitchCmdUserNotice:
-		cu := &Chatter{}
-		cu.updateChatterFromTags(m)
+		cu := createChatter(IrcNick(m.Name), m)
 		c.viewers.GetViewerFromChatter(cu)
 		c.Logf(LogCatSystem, "%s", m.Tags[TwitchTagSystemMsg])
 
 	case TwitchCmdUserState:
-		cu := &Chatter{}
-		cu.updateChatterFromTags(m)
+		cu := createChatter(IrcNick(m.Name), m)
 		v := c.viewers.GetViewerFromChatter(cu)
 
 		c.InRoom[v.GetNick()] = v
@@ -411,8 +436,10 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// Trailing = <message>
 		// Param[0] channel
 
+		nick := IrcNick(m.Name)
+
 		// SPECIAL CASES because twitch
-		switch m.Name {
+		switch nick {
 		case "jtv":
 			// TODO :: Add reaction hook
 			c.Logf(LogCatSystem, "%s", m.Trailing())
@@ -424,18 +451,17 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 
-		v, err := c.viewers.FindViewer(IrcNick(m.Name))
+		v, err := c.viewers.FindViewer(nick)
 		if err != nil {
-			log.Printf("PRIV MSG ERROR [%s] not found\n%s", m.Name, err)
+			log.Printf("PRIV MSG ERROR [%s] not found\n%s", nick, err)
 			return
 		}
 
 		if v.Chatter == nil {
-			v.Chatter = &Chatter{
-				Nick: v.GetNick(),
-			}
+			v.Chatter = createChatter(nick, m)
+		} else {
+			v.Chatter.updateChatterFromTags(m)
 		}
-		v.Chatter.updateChatterFromTags(m)
 
 		// Priority Badge
 		singleBadge := v.Chatter.SingleBadge()

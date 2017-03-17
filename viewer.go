@@ -5,18 +5,17 @@ import (
 	"log"
 	"runtime/debug"
 	"strings"
-	"time"
 )
 
 // Viewer is basic Viewer
 type Viewer struct {
-	TwitchID  ID
-	Coins     Currency
-	WatchTime time.Duration
+	TwitchID ID
+	Coins    Currency
 
-	User    *User
-	Auth    *UserAuth
-	Chatter *Chatter
+	User     *User
+	Auth     *UserAuth
+	Chatter  *Chatter
+	Follower *ChannelFollow
 
 	client *Client
 }
@@ -72,7 +71,7 @@ func (ah *Client) GetViewerFromChatter(cu *Chatter) *Viewer {
 	} else if cu.Nick != "" {
 		v, err := ah.FindViewer(cu.Nick)
 		if err != nil {
-			log.Printf("GetViewerFromChatter - unable to get from nick\n%s", err)
+			log.Printf("GetViewerFromChatter - unable to get from nick [%s] \n%s", cu.Nick, err)
 			return nil
 		}
 		v.Chatter = cu
@@ -80,7 +79,7 @@ func (ah *Client) GetViewerFromChatter(cu *Chatter) *Viewer {
 	} else if cu.DisplayName != "" {
 		v, err := ah.FindViewer(IrcNick(cu.DisplayName))
 		if err != nil {
-			log.Printf("GetViewerFromChatter - unable to get from display name\n%s", err)
+			log.Printf("GetViewerFromChatter - unable to get from display name [%s] \n%s", cu.DisplayName, err)
 			return nil
 		}
 		v.Chatter = cu
@@ -200,4 +199,16 @@ func (vw *Viewer) UpdateUser() error {
 	}
 
 	return nil
+}
+
+// UpdateFollowStatus - Update Follower Status
+func (vw *Viewer) UpdateFollowStatus() (bool, error) {
+
+	cFollow, err := vw.client.User.IsFollowing(vw.TwitchID, vw.client.AdminAuth.token.UserID)
+	if err != nil {
+		return false, err
+	}
+
+	vw.Follower = cFollow
+	return (vw.Follower != nil), nil
 }

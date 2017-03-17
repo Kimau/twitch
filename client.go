@@ -106,7 +106,7 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string) (*Client, 
 	kb.AdminAuth = &UserAuth{
 		token:      nil,
 		oauthState: authInternalState(GenerateRandomString(16)),
-		scopes:     make(map[string]bool),
+		Scopes:     make(map[string]bool),
 	}
 	kb.AdminAuth.updateScope(reqScopes)
 
@@ -164,7 +164,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, vwr.Auth.sessionCookie)
+	http.SetCookie(w, vwr.Auth.SessionCookie)
 	fmt.Fprintf(w, "You are logged in %s", vwr.GetNick())
 }
 
@@ -182,7 +182,7 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 	req.Header.Add("Accept", "application/vnd.twitchtv.v5+json")
 	req.Header.Add("Client-ID", ah.ClientID)
 	if au != nil && au.token != nil {
-		req.Header.Add("Authorization", "OAuth "+au.authcode)
+		req.Header.Add("Authorization", "OAuth "+au.AuthCode)
 	}
 
 	resp, err := ah.httpClient.Do(req)

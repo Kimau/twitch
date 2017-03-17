@@ -26,14 +26,13 @@ type authToken struct {
 
 // UserAuth - Used to manage OAuth for Logins
 type UserAuth struct {
-	authcode   string
+	AuthCode      string
+	IrcCode       string
+	Scopes        map[string]bool
+	SessionCookie *http.Cookie
+
 	oauthState authInternalState
-	ircCode    string
-
-	token *authToken
-
-	sessionCookie *http.Cookie
-	scopes        map[string]bool
+	token      *authToken
 }
 
 // GetAuth - checks if auth and if auth returns auth code
@@ -42,7 +41,7 @@ func (ua *UserAuth) GetAuth() (bool, string) {
 		return false, ""
 	}
 
-	return ua.token.IsValid, ua.authcode
+	return ua.token.IsValid, ua.AuthCode
 }
 
 // GetIrcAuth - returns the stuff needed for IRC
@@ -52,7 +51,7 @@ func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string) {
 		return false, "", ""
 	}
 
-	return true, string(ua.token.Username), "oauth:" + ua.authcode
+	return true, string(ua.token.Username), "oauth:" + ua.AuthCode
 }
 
 func mergeScopeString(scopeList []string) string {
@@ -64,12 +63,12 @@ func splitScopeString(scopeString string) []string {
 }
 
 func (ua *UserAuth) getScopeString() string {
-	if ua.scopes == nil {
+	if ua.Scopes == nil {
 		return ""
 	}
 
 	s := ""
-	for k, v := range ua.scopes {
+	for k, v := range ua.Scopes {
 		if v {
 			s += k + "+"
 		}
@@ -81,17 +80,17 @@ func (ua *UserAuth) getScopeString() string {
 }
 
 func (ua *UserAuth) updateScope(scopeList []string) {
-	for k := range ua.scopes {
-		ua.scopes[k] = false
+	for k := range ua.Scopes {
+		ua.Scopes[k] = false
 	}
 	for _, k := range scopeList {
-		ua.scopes[k] = true
+		ua.Scopes[k] = true
 	}
 }
 
 func (ua *UserAuth) checkScope(reqScopes ...string) error {
 	for _, v := range reqScopes {
-		if ua.scopes[v] == false {
+		if ua.Scopes[v] == false {
 			return fmt.Errorf("Scope Required: %s", v)
 		}
 	}
@@ -100,12 +99,12 @@ func (ua *UserAuth) checkScope(reqScopes ...string) error {
 }
 
 func (ua *UserAuth) checkCookie(c *http.Cookie) bool {
-	return (ua.sessionCookie != nil && c != nil && ua.sessionCookie.Value == c.Value)
+	return (ua.SessionCookie != nil && c != nil && ua.SessionCookie.Value == c.Value)
 }
 
 func (ua *UserAuth) createSessionCookie(domain string) *http.Cookie {
 	expiration := time.Now().Add(365 * 24 * time.Hour)
-	ua.sessionCookie = &http.Cookie{
+	ua.SessionCookie = &http.Cookie{
 		Name:    UserAuthSessionCookieName,
 		Value:   fmt.Sprintf("%s:%s", ua.token.UserID, GenerateRandomString(16)),
 		Domain:  domain, // Wont work for local host because not valid domain
@@ -113,5 +112,5 @@ func (ua *UserAuth) createSessionCookie(domain string) *http.Cookie {
 		Expires: expiration,
 	}
 
-	return ua.sessionCookie
+	return ua.SessionCookie
 }

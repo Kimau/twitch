@@ -171,14 +171,14 @@ func (u *UsersMethod) GetByName(names []IrcNick) ([]User, error) {
 }
 
 // EmoteList - Get User Emotes
-func (u *UsersMethod) EmoteList(id string) (*[]Emote, error) {
+func (u *UsersMethod) EmoteList(id ID) (*[]Emote, error) {
 	err := u.au.checkScope(scopeUserSubscriptions)
 	if err != nil {
 		return nil, err
 	}
 
 	var eList []Emote
-	_, err = u.client.Get(u.au, "users/"+id+"/emotes", &eList)
+	_, err = u.client.Get(u.au, fmt.Sprintf("users/%s/emotes", id), &eList)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (u *UsersMethod) EmoteList(id string) (*[]Emote, error) {
 }
 
 // IsFollowing - Check User Follows by Channel
-func (u *UsersMethod) IsFollowing(uid string, cid string) (*ChannelFollow, error) {
+func (u *UsersMethod) IsFollowing(uid ID, cid ID) (*ChannelFollow, error) {
 	var fAns ChannelFollow
 
 	_, err := u.client.Get(u.au,
@@ -200,7 +200,7 @@ func (u *UsersMethod) IsFollowing(uid string, cid string) (*ChannelFollow, error
 }
 
 // IsSubscribed - Check User Subscription by Channel
-func (u *UsersMethod) IsSubscribed(uid string, cid string) (*ChannelSub, error) {
+func (u *UsersMethod) IsSubscribed(uid ID, cid ID) (*ChannelSub, error) {
 	err := u.au.checkScope(scopeUserSubscriptions)
 	if err != nil {
 		return nil, err

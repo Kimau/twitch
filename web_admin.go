@@ -1,12 +1,15 @@
 package twitch
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // AdminHTTP for backoffice requests
@@ -66,6 +69,25 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		fmt.Fprint(w, body)
+
+	case debugOptions && strings.HasPrefix(relPath, "savedump"):
+		f, err := os.Create(fmt.Sprintf("dump_%s_%d.bin", ah.Chat.Room, time.Now().Unix()))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		enc := gob.NewEncoder(f)
+		for _, v := range ah.Viewers {
+			err = enc.Encode(v)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				f.Close()
+				return
+			}
+		}
+
+		fmt.Fprintf(w, "Dumped data to file: %s", f.Name())
+		f.Close()
 
 	default:
 		b, err := json.Marshal(ah.AdminUser)

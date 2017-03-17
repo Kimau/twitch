@@ -97,7 +97,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	} else { // Normal user do logic
 		authU = &UserAuth{
 			oauthState: stateVal,
-			scopes:     make(map[string]bool),
+			Scopes:     make(map[string]bool),
 		}
 
 		delete(ah.PendingLogins, stateVal)
@@ -119,7 +119,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	// Save State
 	authU.token = nil
 	authU.updateScope(scopeList)
-	authU.ircCode = c[0]
+	authU.IrcCode = c[0]
 
 	err := ah.handleOAuthResult(authU)
 	if err != nil {
@@ -136,7 +136,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 				authU.token.Username, tID,
 				strings.Join(scopeList, "\n\t"))
 
-			if ah.AdminAuth.scopes[scopeChatLogin] {
+			if ah.AdminAuth.Scopes[scopeChatLogin] {
 				go ah.startNewChat()
 			}
 
@@ -167,7 +167,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	data.Set("client_secret", ah.ClientSecret)
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", fmt.Sprintf(redirStringURL, ah.domain))
-	data.Set("code", authU.ircCode)
+	data.Set("code", authU.IrcCode)
 	data.Set("state", string(authU.oauthState))
 	payload := strings.NewReader(data.Encode())
 
@@ -203,7 +203,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	if err != nil {
 		return err
 	}
-	authU.authcode = tokenStruct.Token
+	authU.AuthCode = tokenStruct.Token
 
 	err = ah.getRootToken(authU)
 	if err != nil {

@@ -23,13 +23,57 @@ type Chatter struct {
 	Badges   map[string]int
 	Color    string
 
-	LastActive time.Time
-	id         ID // not cannonical data
+	TimeInChannel time.Duration
+	LastActive    time.Time
+
+	id ID // not cannonical data
+}
+
+func createChatter(nick IrcNick, m *irc.Message) *Chatter {
+	if strings.Contains(string(nick), ".") {
+		// This is likely a system message
+		if m == nil {
+			log.Fatalf("createChatter shouldn't process system message: %s\n %s", nick, m)
+		}
+
+		newNick, b := m.GetTag(TwitchTagUserDisplayName)
+		if b == false {
+			log.Fatalf("createChatter couldn't recover from sys message\n %s", m)
+		}
+		nick = IrcNick(newNick)
+	}
+
+	cu := &Chatter{
+		Nick:        nick,
+		DisplayName: string(nick),
+		Bits:        0,
+
+		Mod:      false,
+		Sub:      0,
+		UserType: TwitchTypeEmpty,
+		Color:    "#000000",
+
+		TimeInChannel: 0,
+		LastActive:    time.Now(),
+	}
+
+	if m != nil {
+		cu.updateChatterFromTags(m)
+	}
+
+	return cu
+}
+
+func (cu *Chatter) updateActive() {
+	newTime := time.Now()
+	timeSince := newTime.Sub(cu.LastActive)
+
+	cu.TimeInChannel += timeSince
+	cu.LastActive = newTime
 }
 
 func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
-
-	cu.LastActive = time.Now()
+	cu.updateActive()
 
 	for tagName, tagVal := range m.Tags {
 		switch tagName {
