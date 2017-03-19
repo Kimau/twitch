@@ -74,6 +74,40 @@ func StringToEmoteID(s string) (EmoteID, error) {
 	return EmoteID(i), nil
 }
 
+// ParseEmoteReplaceListFromBack - converts a string into an emote parse list
+func ParseEmoteReplaceListFromBack(src string) (EmoteReplaceListFromBack, error) {
+	var ret EmoteReplaceListFromBack
+	emoteStrings := strings.Split(src, "|")
+	for _, e := range emoteStrings {
+		eBits := strings.Split(e, ",")
+		if len(eBits) != 3 {
+			return nil, fmt.Errorf("Didn't break down into 3 bits: %s", e)
+		}
+
+		emoID, err := strconv.Atoi(eBits[0])
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse emote ID [%s]: %s", eBits[0], e)
+		}
+
+		sPos, err := strconv.Atoi(eBits[1])
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse start pos [%s]: %s", eBits[1], e)
+		}
+		ePos, err := strconv.Atoi(eBits[2])
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse end pos [%s]: %s", eBits[2], e)
+		}
+
+		ret = append(ret, EmoteReplace{
+			ID:    EmoteID(emoID),
+			Start: sPos,
+			End:   ePos,
+		})
+	}
+
+	return ret, nil
+}
+
 func emoteTagToList(val irc.TagValue) (EmoteReplaceListFromBack, error) {
 
 	if len(val) <= 0 {

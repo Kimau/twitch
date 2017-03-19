@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"io"
+
 	"github.com/go-irc/irc"
 	"golang.org/x/time/rate"
 )
@@ -50,7 +52,7 @@ type Chat struct {
 	messageOfTheDay []string
 	nameReplyList   []IrcNick
 
-	msgLogger *log.Logger
+	msgLogger io.Writer
 	logBuffer *circLineBuffer
 
 	viewers viewerProvider
@@ -476,7 +478,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			if err != nil {
 				log.Print("Bits error -", m, err)
 			} else {
-				bitString = fmt.Sprintf("[%d]", bVal)
+				bitString = fmt.Sprintf(" [%d]", bVal)
 			}
 		}
 
@@ -488,7 +490,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			if err != nil {
 				log.Printf("Unable to parse Emote Tag [%s]\n%s", emoteList, err)
 			} else if len(el) > 0 {
-				emoteString = fmt.Sprintf("{%s}", el)
+				emoteString = fmt.Sprintf(" {%s}", el)
 			}
 		}
 
@@ -498,11 +500,11 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		if strings.HasPrefix(msgBody, "ACTION") {
 			msgBody = strings.TrimLeft(msgBody, "ACTION")
 
-			c.Logf(LogCatAction, "%s %s %s %s %s: %s",
+			c.Logf(LogCatAction, "%s %s %s%s%s : %s",
 				v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
 				msgBody)
 		} else {
-			c.Logf(LogCatMsg, "%s %s %s %s %s: %s",
+			c.Logf(LogCatMsg, "%s %s %s%s%s : %s",
 				v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
 				msgBody)
 		}

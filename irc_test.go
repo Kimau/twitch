@@ -121,7 +121,7 @@ func (dvp *DummyViewProvider) FindViewer(nick IrcNick) (*Viewer, error) {
 		}
 	}
 
-	id := ID(GenerateRandomString(10))
+	id := generateDummyID()
 	v := &Viewer{
 		TwitchID: id,
 		User: &User{
@@ -210,6 +210,21 @@ func TestIrcMessage(t *testing.T) {
 
 	t.Log("___________________________")
 	chat.logBuffer.ResetCursor()
+	for s := chat.logBuffer.NextLine(); len(s) > 0; s = chat.logBuffer.NextLine() {
+		llp, err := ParseLogLine(s)
+		if err != nil {
+			t.Logf("LOG LINE PARSE FAIL: %s\n%s", s, err.Error())
+			t.Fail()
+			continue
+		}
+
+		s2 := llp.String()
+		if s != s2 {
+			t.Logf("LOG LINE Parse / unparse failed \n%s\n%s", s, s2)
+			t.Fail()
+		}
+	}
+	chat.logBuffer.ResetCursor()
 	t.Log(chat.logBuffer)
 }
 
@@ -246,4 +261,23 @@ func TestEmoteTagProcessor(t *testing.T) {
 		}
 	}
 
+}
+
+func TestParser(t *testing.T) {
+
+	for i, s := range []string{
+		"IRC: 00:00:00 *Blank Message",
+		"IRC: 00:00:00 _Blank Message",
+		"IRC: 00:00:00 ~Blank Message",
+		"IRC: 00:00:00 ?Blank Message",
+		"IRC: 00:00:00 #59727914 . morbiddezirez : fine",
+		"IRC: 00:00:00 #59727914 S6 morbiddezirez : fine",
+		"IRC: 00:00:00 !31527093 P buttrot : Good in West US",
+	} {
+		_, err := ParseLogLine(s)
+		if err != nil {
+			t.Logf("PARSE FAIL: %d - %s", i, err)
+			t.Fail()
+		}
+	}
 }
