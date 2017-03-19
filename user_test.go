@@ -23,7 +23,7 @@ func TestUserFull(t *testing.T) {
     },
     "partnered": false,
     "twitter_connected": false,
-    "type": "staff",
+    "type": "staff", 
     "updated_at": "2016-12-14T01:01:44Z"
 }`
 

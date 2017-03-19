@@ -66,8 +66,13 @@ func (c *Chat) Logf(lvl LogCat, s string, v ...interface{}) {
 	c.Log(lvl, fmt.Sprintf(s, v...))
 }
 
+// ReadLine - Read a single Line
+func (c *Chat) ReadLine() string {
+	return c.logBuffer.NextLine()
+}
+
 // SetupLogWriter - Set where the log is written to
-func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
+func (c *Chat) setupLogWriter(newTarget ...io.Writer) {
 	c.logBuffer = makeCircLineBuffer(1024 * 1024 * 8)
 	c.logBuffer.Reset()
 	if newTarget != nil {
@@ -83,7 +88,7 @@ func (c *Chat) SetupLogWriter(newTarget ...io.Writer) {
 
 	ts := time.Now().Format(time.RFC822Z)
 	c.Logf(LogCatSilent, "+------------ New Log [%s] ------------+ %s",
-		c.Room, ts)
+		c.viewers.GetRoom().GetNick(), ts)
 }
 
 // ParseLogLine - Parse a Log Line useful for inspection

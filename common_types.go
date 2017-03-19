@@ -1,7 +1,9 @@
 package twitch
 
-import "net/http"
-import "fmt"
+import (
+	"fmt"
+	"net/http"
+)
 
 // ID - Numberic Identifier of Twitch Identity
 type ID string
@@ -20,14 +22,6 @@ type WebClient interface {
 // ircAuthProvider - Provides Auth normally expects UserAuth
 type ircAuthProvider interface {
 	GetIrcAuth() (hasauth bool, name string, pass string)
-}
-
-type viewerProvider interface {
-	GetNick() IrcNick
-	GetViewer(ID) *Viewer
-	FindViewer(IrcNick) (*Viewer, error)
-	UpdateViewers([]IrcNick) []*Viewer
-	GetViewerFromChatter(*Chatter) *Viewer
 }
 
 // Twitch Scopes

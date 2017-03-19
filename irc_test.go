@@ -77,8 +77,8 @@ var (
 type DummyAuth struct {
 }
 
-func (da *DummyAuth) GetIrcAuth() (hasauth bool, name string, pass string, addr string) {
-	return true, "kimau", "pass", "irc.server.com:6667"
+func (da *DummyAuth) GetIrcAuth() (hasauth bool, name string, pass string) {
+	return true, "kimau", "pass"
 }
 
 type DummyWriteRead struct {
@@ -96,6 +96,18 @@ func (dh *DummyHandler) Handle(c *irc.Client, m *irc.Message) {
 
 type DummyViewProvider struct {
 	Viewers map[ID]*Viewer
+}
+
+func (dvp *DummyViewProvider) GetAuthViewer() *Viewer {
+	v := dvp.GetViewer(ID(0))
+	v.User.Name = "kimau"
+	return v
+}
+
+func (dvp *DummyViewProvider) GetRoom() *Viewer {
+	v := dvp.GetViewer(ID(0))
+	v.User.Name = "kimau"
+	return v
 }
 
 func (dvp *DummyViewProvider) GetNick() IrcNick { return "kimau" }
@@ -142,6 +154,12 @@ func (dvp *DummyViewProvider) UpdateViewers(nickList []IrcNick) []*Viewer {
 	return vList
 }
 
+func (dvp *DummyViewProvider) GetViewerFromUser(u *User) *Viewer {
+	v := dvp.GetViewer(u.ID)
+	v.User = u
+	return v
+}
+
 // GetViewerFromChatter - Get Viewer from Chatter
 func (dvp *DummyViewProvider) GetViewerFromChatter(cu *Chatter) *Viewer {
 	if cu.id != "" {
@@ -167,24 +185,13 @@ func (dvp *DummyViewProvider) GetViewerFromChatter(cu *Chatter) *Viewer {
 
 func TestIrcMessage(t *testing.T) {
 
-	_, nick, pass, serverAddr := (&DummyAuth{}).GetIrcAuth()
-
-	chat := &Chat{
-		Server:  serverAddr,
-		Room:    nick,
-		verbose: *flagIrcVerbose,
-		config: irc.ClientConfig{
-			Nick: nick,
-			Pass: pass,
-			User: "Username",
-			Name: "Full Name",
-		},
-		viewers: &DummyViewProvider{},
-		InRoom:  make(map[IrcNick]*Viewer),
-	}
-
-	chat.SetupLogWriter()
+	chat, err := createIrcClient(&DummyAuth{}, &DummyViewProvider{}, "", nil)
 	chat.config.Handler = chat
+
+	if err != nil {
+		t.Log(err)
+		t.FailNow()
+	}
 
 	ircClient := irc.NewClient(&DummyWriteRead{}, chat.config)
 

@@ -2,7 +2,6 @@ package twitch
 
 import (
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -39,7 +38,6 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	case strings.HasPrefix(relPath, "chat"):
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Fprint(w, ah.Chat.logBuffer.String())
-		ah.Chat.logBuffer.ResetCursor()
 
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()
@@ -79,7 +77,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(w, body)
 
 	case debugOptions && strings.HasPrefix(relPath, "savedump"):
-		f, err := os.Create(fmt.Sprintf("dump_%s_%d.bin", ah.Chat.Room, time.Now().Unix()))
+		f, err := os.Create(fmt.Sprintf("dump_%s_%d.bin", ah.GetRoom().GetNick(), time.Now().Unix()))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -98,12 +96,6 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		f.Close()
 
 	default:
-		b, err := json.Marshal(ah.AdminUser)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Invalid Endpoint: %s", req.URL.Path), 404)
-		} else {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, string(b))
-		}
+		http.Error(w, fmt.Sprintf("Invalid Endpoint: %s", req.URL.Path), 404)
 	}
 }

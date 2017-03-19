@@ -1,7 +1,6 @@
 package twitch
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -24,9 +23,7 @@ const (
 
 // needs to bind to real address for VPN
 var (
-	flagIrcVerbose     = flag.Bool("ircVerbose", false, "Should IRC logging be verbose")
-	flagIrcChannel     = flag.String("ircRoom", "", "Which Twitch chat room to Join")
-	flagIrcPerformFile = flag.String("performfile", "", "Load File and perform on load")
+	IrcVerboseMode = false
 
 	regexHostName = regexp.MustCompile(" ([a-z_]+)\\.$")
 	regexHostMsg  = regexp.MustCompile("([[:word:]]+)\\.")
@@ -41,8 +38,6 @@ var (
 // Chat - IRC Chat interface
 type Chat struct {
 	Server  string
-	Room    string
-	verbose bool
 	config  irc.ClientConfig
 	limiter *rate.Limiter
 
@@ -63,7 +58,7 @@ func init() {
 
 }
 
-func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string) (*Chat, error) {
+func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string, chatWriters []io.Writer) (*Chat, error) {
 
 	log.Println("Creating IRC Client")
 
@@ -72,15 +67,8 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 		return nil, fmt.Errorf("Associated user has no valid Auth")
 	}
 
-	ircRoomToJoin := *flagIrcChannel
-	if len(ircRoomToJoin) < 2 {
-		ircRoomToJoin = nick
-	}
-
 	chat := &Chat{
-		Server:  serverAddr,
-		Room:    ircRoomToJoin,
-		verbose: *flagIrcVerbose,
+		Server: serverAddr,
 		config: irc.ClientConfig{
 			Nick: nick,
 			Pass: pass,
@@ -90,7 +78,7 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 		viewers: vp,
 	}
 
-	chat.SetupLogWriter()
+	chat.setupLogWriter(chatWriters...)
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
 
@@ -117,7 +105,7 @@ func (c *Chat) StartRunLoop() error {
 	activeInRoomTicker := time.NewTicker(time.Minute * 5)
 	go c.tickRoomActive(activeInRoomTicker)
 
-	if c.verbose {
+	if IrcVerboseMode {
 		// In Verbose mode log all messages
 		c.irc.Reader.DebugCallback = func(m string) {
 			log.Printf("IRC (V) >> %s", m)
@@ -165,7 +153,7 @@ func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/membership")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/tags")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/commands")
-	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.Room))
+	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.viewers.GetRoom().GetNick()))
 }
 
 func (c *Chat) nowHosting(target *Viewer) {

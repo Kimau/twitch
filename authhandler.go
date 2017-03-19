@@ -140,14 +140,11 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Admin Auth has no token", 400)
 		}
 
-		go func() {
-			ah.AdminUser, err = ah.User.Get(tID)
-			if err != nil {
-				log.Println("Failed to Get Admin User Data", err)
-			}
-		}()
+		ah.AdminID = tID
+		ah.GetViewer(tID)
+
 	} else {
-		v := ah.CreateViewer(tID)
+		v := ah.GetViewer(tID)
 		v.Auth = authU
 
 		http.SetCookie(w, v.Auth.createSessionCookie(ah.domain))
