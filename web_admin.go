@@ -1,14 +1,11 @@
 package twitch
 
 import (
-	"encoding/gob"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // AdminHTTP for backoffice requests
@@ -37,7 +34,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 
 	case strings.HasPrefix(relPath, "chat"):
 		w.Header().Set("Content-Type", "text/plain")
-		fmt.Fprint(w, ah.Chat.logBuffer.String())
+		fmt.Fprint(w, ah.Chat.ReadChatFull())
 
 	case strings.HasPrefix(relPath, "me"):
 		uf, err := ah.User.GetMe()
@@ -77,23 +74,11 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(w, body)
 
 	case debugOptions && strings.HasPrefix(relPath, "savedump"):
-		f, err := os.Create(fmt.Sprintf("dump_%s_%d.bin", ah.GetRoom().GetNick(), time.Now().Unix()))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+		if err := ah.DumpState(); err != nil {
+			fmt.Fprintf(w, "Failed to Dump: %s", err)
+		} else {
+			fmt.Fprintf(w, "Dumped data to file")
 		}
-		enc := gob.NewEncoder(f)
-		for _, v := range ah.Viewers {
-			err = enc.Encode(v)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				f.Close()
-				return
-			}
-		}
-
-		fmt.Fprintf(w, "Dumped data to file: %s", f.Name())
-		f.Close()
 
 	default:
 		http.Error(w, fmt.Sprintf("Invalid Endpoint: %s", req.URL.Path), 404)

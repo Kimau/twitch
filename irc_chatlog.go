@@ -23,6 +23,24 @@ const (
 	LogCatUnknown  LogCat = '?'
 )
 
+// FriendlyName - Produce a friendly name for Cat
+func (lc LogCat) FriendlyName() string {
+	switch lc {
+	case LogCatSystem:
+		return "System"
+	case LogCatSilent:
+		return "Silent"
+	case LogCatFiltered:
+		return "Filtered"
+	case LogCatMsg:
+		return "Msg"
+	case LogCatAction:
+		return "Action"
+	default:
+		return "Unknown"
+	}
+}
+
 // LogLineParsed - Useful for Parsing Log Lines
 type LogLineParsed struct {
 	StampSeconds int
@@ -44,6 +62,17 @@ type LogLineParsedMsg struct {
 
 //
 const (
+	ChatLogFormatHTML = `<div class="chatline %s">
+		<span class="time">%2d:%02d:%02d</span>
+		<span class="content">%s</span>
+		</div>`
+	ChatLogFormatMsgHTML = `<div class="chatline %s">
+		<span class="time">%2d:%02d:%02d</span>
+		<span class="id">%s</span>
+		<span class="badge %s"></span>
+		<span class="nick">%s</span>
+		<span class="content">%s</span>
+		</div>`
 	ChatLogFormatString = "IRC: %2d:%02d:%02d %c%s"
 )
 
@@ -66,9 +95,19 @@ func (c *Chat) Logf(lvl LogCat, s string, v ...interface{}) {
 	c.Log(lvl, fmt.Sprintf(s, v...))
 }
 
-// ReadLine - Read a single Line
-func (c *Chat) ReadLine() string {
+// ReadChatFull - Dumps the full in memory buffer of chat
+func (c *Chat) ReadChatFull() string {
+	return c.logBuffer.String()
+}
+
+// ReadChatLine - Read next single Line from Chat
+func (c *Chat) ReadChatLine() string {
 	return c.logBuffer.NextLine()
+}
+
+// ResetChatCursor - Read next single Line from Chat
+func (c *Chat) ResetChatCursor() {
+	c.logBuffer.ResetCursor()
 }
 
 // SetupLogWriter - Set where the log is written to
@@ -106,7 +145,7 @@ func ParseLogLine(fullS string) (*LogLineParsed, error) {
 	llp.StampSeconds = 0
 	mult := []int{0, 60 * 60, 60, 1}
 	for i := 1; i < 4; i++ {
-		v, e := strconv.Atoi(sBits[i])
+		v, e := strconv.Atoi(strings.Trim(sBits[i], " "))
 		if e != nil {
 			return nil, fmt.Errorf("Problem processing timestamp [%s] : %s", sBits[i], e.Error())
 		}
@@ -162,6 +201,34 @@ func (llp *LogLineParsed) parseMsgBody() error {
 
 	return nil
 
+}
+
+// HTML - Produce HTML for Chat Line
+func (llp *LogLineParsed) HTML() string {
+	seconds := llp.StampSeconds
+	hour := seconds / (60 * 60)
+	seconds -= hour * 60 * 60
+	minute := seconds / 60
+	seconds -= minute * 60
+
+	catStr := llp.Cat.FriendlyName()
+
+	if llp.Msg == nil {
+		return fmt.Sprintf(ChatLogFormatHTML,
+			catStr,
+			hour, minute, seconds,
+			llp.Body)
+	}
+
+	msgContent := llp.Msg.Emotes.Replace(llp.Msg.Content)
+
+	return fmt.Sprintf(ChatLogFormatMsgHTML,
+		catStr,
+		hour, minute, seconds,
+		llp.Msg.UserID,
+		llp.Msg.Badge,
+		llp.Msg.Nick,
+		msgContent)
 }
 
 func (llp *LogLineParsed) String() string {

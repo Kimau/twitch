@@ -57,8 +57,17 @@ func (a EmoteReplaceListFromBack) String() string {
 	return r
 }
 
+// Replace - Replace the string with emotes
+func (a EmoteReplaceListFromBack) Replace(source string) string {
+	for _, erl := range a {
+		source = source[:erl.Start] + fmt.Sprintf(`<img src="%s">`, erl.ID.EmoteURL(false)) + source[erl.End+1:]
+	}
+
+	return source
+}
+
 // EmoteURL - Returns the URL of the Emote
-func EmoteURL(id EmoteID, isBig bool) string {
+func (id EmoteID) EmoteURL(isBig bool) string {
 	if isBig {
 		return fmt.Sprintf(emoteBigURL, id)
 	}

@@ -227,10 +227,17 @@ func (clb *circLineBuffer) Write(p []byte) (n int, err error) {
 	return wl, nil
 }
 
+// ResetCursor - Reset Cursor position
 func (clb *circLineBuffer) ResetCursor() {
 	clb.cursorOff = clb.readOff
 }
 
+// EndCursor - Move Cursor to End
+func (clb *circLineBuffer) EndCursor() {
+	clb.cursorOff = clb.writeOff
+}
+
+// Read - Read from Cursor Pos
 func (clb *circLineBuffer) Read(p []byte) (n int, err error) {
 	if clb.cursorOff == clb.writeOff {
 		return 0, nil
