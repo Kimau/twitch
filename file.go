@@ -17,7 +17,8 @@ const (
 )
 
 var (
-	regexDumpFileMatch = regexp.MustCompile("dump_([[:word:]])_([0-9]).bin")
+	regexChatLogFileMatch = regexp.MustCompile("([[:word:]]*)_chat.log")
+	regexDumpFileMatch    = regexp.MustCompile("dump_([[:word:]]*)_([0-9]*).bin")
 )
 
 // DumpState - Dump the Internal State to File
@@ -59,6 +60,26 @@ func GetDumpListing(chanName string) [][]string {
 			if ignoreNameMatch || chanName == res[1] {
 				sList = append(sList, res)
 			}
+		}
+	}
+
+	return sList
+}
+
+// GetChatLogListing - Listing of All Chat Logs in this folder
+func GetChatLogListing() []string {
+	sList := []string{}
+
+	files, err := ioutil.ReadDir(".")
+	if err != nil {
+		log.Printf("Unable to ReadDir: %s", err)
+		return nil
+	}
+
+	for _, file := range files {
+		res := regexChatLogFileMatch.FindStringSubmatch(file.Name())
+		if len(res) == 2 {
+			sList = append(sList, res[1])
 		}
 	}
 
