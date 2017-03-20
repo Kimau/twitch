@@ -4,13 +4,13 @@ import "log"
 
 // Viewer is basic Viewer
 type Viewer struct {
-	TwitchID ID
-	Coins    Currency
+	TwitchID ID       `json:"id"`
+	Coins    Currency `json:"coins"`
 
-	User     *User
-	Auth     *UserAuth
-	Chatter  *Chatter
-	Follower *ChannelFollow
+	User     *User          `json:"user"`
+	Auth     *UserAuth      `json:"auth"`
+	Chatter  *Chatter       `json:"chatter"`
+	Follower *ChannelFollow `json:"follow"`
 
 	client *Client
 }
