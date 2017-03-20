@@ -79,7 +79,7 @@ const (
 var (
 	regexLogMsg = regexp.MustCompile("^IRC: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([^ ])(.*)")
 	// # TwitchID badge nick {emoteString}? [bitString]? : body
-	regexPrivMsg = regexp.MustCompile("([[:word:]]+) ([[:graph:]]+) ([[:word:]]+)( \\{[0-9,\\|]+\\})?( \\[[[:word:]]+\\])? *: (.*)")
+	regexPrivMsg = regexp.MustCompile("([[:word:]]+) ([[:graph:]]+) ([[:word:]]+)( +\\{[0-9,\\|]+\\})?( +\\[[[:word:]]+\\])? *: (.*)")
 )
 
 // Log - Log to internal message logger
@@ -191,9 +191,10 @@ func (llp *LogLineParsed) parseMsgBody() error {
 
 	// Parse Bits
 	if len(subStrings[5]) > 2 {
-		b, err := strconv.Atoi(subStrings[5][2 : len(subStrings[5])-1])
+		b, err := strconv.Atoi(subStrings[5][strings.Index(subStrings[5], "[")+1 : strings.Index(subStrings[5], "]")])
 		if err != nil {
-			return fmt.Errorf("Failed to Parse Bits: %s \n %s", subStrings[5], err.Error())
+			return fmt.Errorf("Failed to Parse Bits: %s %s \n %s",
+				subStrings[5], subStrings[5][strings.Index(subStrings[5], "[")+1:strings.Index(subStrings[5], "]")], err.Error())
 		}
 
 		llp.Msg.Bits = b

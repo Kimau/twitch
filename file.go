@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"bufio"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ const (
 var (
 	regexChatLogFileMatch = regexp.MustCompile("([[:word:]]*)_chat.log")
 	regexDumpFileMatch    = regexp.MustCompile("dump_([[:word:]]*)_([0-9]*).bin")
+	regexChatNewLog       = regexp.MustCompile("[\\+\\-]* New Log \\[([[:word:]]*)\\] [\\+\\-]* ([0-9].*)")
 )
 
 // DumpState - Dump the Internal State to File
@@ -128,6 +130,53 @@ func LoadDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 
 // LoadChatForAnalysis - Load Chat Log for Analysis
 func LoadChatForAnalysis(filename string) (*HistoricChatLog, error) {
-	// TODO :: LoadChatForAnalysis
-	return nil, nil
+	var hc HistoricChatLog
+
+	res := regexChatLogFileMatch.FindStringSubmatch(filename)
+	if len(res) != 2 {
+		return nil, fmt.Errorf("Filename is invalid format lazy I know: [%s]", filename)
+	}
+
+	// Name
+	hc.Name = IrcNick(res[1])
+	hc.LogLinesByDay = make(map[time.Time][]LogLineParsed)
+
+	// Open file for Decoding
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	currT := time.Time{}
+	ls := bufio.NewScanner(f)
+	currDay := []LogLineParsed{}
+	for ls.Scan() {
+		line := ls.Text()
+		llp, err := ParseLogLine(line)
+		if err != nil {
+			return nil, fmt.Errorf("Unabe to parse line\n%s\n%s", line, err)
+		}
+
+		subs := regexChatNewLog.FindStringSubmatch(llp.Body)
+		if len(subs) == 3 {
+			if len(currDay) > 0 {
+				hc.LogLinesByDay[currT] = currDay
+				currDay = []LogLineParsed{}
+			}
+
+			currT, err = time.Parse(time.RFC822Z, subs[2])
+			if err != nil {
+				return nil, fmt.Errorf("Unable to parse date [%s]\n%s", subs[2], err)
+			}
+		}
+
+		currDay = append(currDay, *llp)
+	}
+
+	if len(currDay) > 0 {
+		hc.LogLinesByDay[currT] = currDay
+	}
+
+	return &hc, nil
 }
