@@ -69,17 +69,19 @@ const (
 	ChatLogFormatMsgHTML = `<div class="chatline %s">
 		<span class="time">%2d:%02d:%02d</span>
 		<span class="id">%s</span>
-		<span class="badge %s"></span>
+		<span class="badge">%s</span>
 		<span class="nick">%s</span>
 		<span class="content">%s</span>
 		</div>`
-	ChatLogFormatString = "IRC: %2d:%02d:%02d %c%s"
+	ChatLogFormatBadgeHTML = `<span class="%s"></span>`
+	ChatLogFormatString    = "IRC: %2d:%02d:%02d %c%s"
 )
 
 var (
 	regexLogMsg = regexp.MustCompile("^IRC: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([^ ])(.*)")
 	// # TwitchID badge nick {emoteString}? [bitString]? : body
-	regexPrivMsg = regexp.MustCompile("([[:word:]]+) ([[:graph:]]+) ([[:word:]]+)( +\\{[0-9,\\|]+\\})?( +\\[[[:word:]]+\\])? *: (.*)")
+	regexPrivMsg    = regexp.MustCompile("([[:word:]]+) ([[:graph:]]+) ([[:word:]]+)( +\\{[0-9,\\|]+\\})?( +\\[[[:word:]]+\\])? *: (.*)")
+	regexBadgeBreak = regexp.MustCompile("[^ 0-9][0-9]*")
 )
 
 // Log - Log to internal message logger
@@ -223,11 +225,17 @@ func (llp *LogLineParsed) HTML() string {
 
 	msgContent := llp.Msg.Emotes.Replace(llp.Msg.Content)
 
+	// Multiple Badges
+	badgeHTML := ""
+	for _, b := range regexBadgeBreak.FindAllStringSubmatch(llp.Msg.Badge, -1) {
+		badgeHTML += fmt.Sprintf(ChatLogFormatBadgeHTML, b[0])
+	}
+
 	return fmt.Sprintf(ChatLogFormatMsgHTML,
 		catStr,
 		hour, minute, seconds,
 		llp.Msg.UserID,
-		llp.Msg.Badge,
+		badgeHTML,
 		llp.Msg.Nick,
 		msgContent)
 }

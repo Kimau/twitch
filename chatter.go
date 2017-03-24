@@ -210,7 +210,7 @@ func (cu *Chatter) SingleBadge() string {
 	r := "."
 	for _, v := range [][]string{
 		{TwitchBadgeBroadcaster, "B️"},
-		{TwitchBadgeStaff, "S"},
+		{TwitchBadgeStaff, "X"},
 		{TwitchBadgeGlobalMod, "G"},
 		{TwitchBadgeMod, "M"},
 		{TwitchBadgeSub, ""},

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	dumpFilePattern = "dump_%s_%d.bin"
+	dumpFilePattern = "./data/dump_%s_%d.bin"
 )
 
 var (
@@ -48,7 +48,7 @@ func (ah *Client) DumpState() error {
 func GetDumpListing(chanName string) [][]string {
 	sList := [][]string{}
 
-	files, err := ioutil.ReadDir(".")
+	files, err := ioutil.ReadDir("./data/")
 	if err != nil {
 		log.Printf("Unable to ReadDir: %s", err)
 		return nil
@@ -72,7 +72,7 @@ func GetDumpListing(chanName string) [][]string {
 func GetChatLogListing() []string {
 	sList := []string{}
 
-	files, err := ioutil.ReadDir(".")
+	files, err := ioutil.ReadDir("./data/")
 	if err != nil {
 		log.Printf("Unable to ReadDir: %s", err)
 		return nil
@@ -106,6 +106,7 @@ func LoadDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 		return nil, err
 	}
 	hvd.Timestamp = time.Unix(unixTime, 0)
+	hvd.ViewerData = make(map[ID]Viewer)
 
 	// Open file for Decoding
 	f, err := os.Open(filename)

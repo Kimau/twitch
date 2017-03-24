@@ -13,9 +13,9 @@ type tokenData struct {
 }
 
 func (ah *Client) loadSecrets() {
-	fileData, err := ioutil.ReadFile("twitch_secret.json")
+	fileData, err := ioutil.ReadFile("./data/twitch_secret.json")
 	if err != nil {
-		log.Fatalf("Dailed to load token data from secret.json: \n%s", err)
+		log.Fatalf("Dailed to load token data from ./data/secret.json: \n%s", err)
 	}
 
 	sd := tokenData{}
