@@ -86,8 +86,6 @@ type Client struct {
 	RoomID     ID
 	RoomStream *StreamBody
 
-	ViewCount []int
-
 	Viewers       map[ID]*Viewer
 	PendingLogins map[authInternalState]time.Time
 

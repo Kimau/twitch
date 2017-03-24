@@ -73,8 +73,15 @@ const (
 		<span class="nick">%s</span>
 		<span class="content">%s</span>
 		</div>`
+	ChatLogFormatMsgExtraHTML = `<div class="chatline %s" coins="%d" style="background:%s;">
+		<span class="time">%2d:%02d:%02d</span>
+		<span class="id">%s</span>
+		<span class="badge">%s</span>
+		<span class="nick">%s</span>
+		<span class="content">%s</span>
+		</div>`
 	ChatLogFormatBadgeHTML = `<span class="%s"></span>`
-	ChatLogFormatString    = "IRC: %2d:%02d:%02d %c%s"
+	ChatLogFormatString    = "IRC: %2d:%02d:%02d %c%s\n"
 )
 
 var (
@@ -207,7 +214,7 @@ func (llp *LogLineParsed) parseMsgBody() error {
 }
 
 // HTML - Produce HTML for Chat Line
-func (llp *LogLineParsed) HTML() string {
+func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	seconds := llp.StampSeconds
 	hour := seconds / (60 * 60)
 	seconds -= hour * 60 * 60
@@ -231,13 +238,31 @@ func (llp *LogLineParsed) HTML() string {
 		badgeHTML += fmt.Sprintf(ChatLogFormatBadgeHTML, b[0])
 	}
 
-	return fmt.Sprintf(ChatLogFormatMsgHTML,
+	// Get Viewer Data
+	v := vp.GetViewer(llp.Msg.UserID)
+	if v == nil {
+		return fmt.Sprintf(ChatLogFormatMsgHTML,
+			catStr,
+			hour, minute, seconds,
+			llp.Msg.UserID,
+			badgeHTML,
+			llp.Msg.Nick,
+			msgContent)
+	}
+
+	if v.Follower != nil {
+		catStr += " follow"
+	}
+
+	return fmt.Sprintf(ChatLogFormatMsgExtraHTML,
 		catStr,
+		v.Coins, v.Chatter.Color,
 		hour, minute, seconds,
 		llp.Msg.UserID,
 		badgeHTML,
 		llp.Msg.Nick,
 		msgContent)
+
 }
 
 func (llp *LogLineParsed) String() string {

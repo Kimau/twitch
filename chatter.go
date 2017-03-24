@@ -205,11 +205,13 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 }
 
 // SingleBadge - Outputs Badge to Display based on priority
+// https://badges.twitch.tv/v1/badges/global/display?language=en
+// https://badges.twitch.tv/v1/badges/channels/x/display?language=en
 func (cu *Chatter) SingleBadge() string {
 	// Only add one of these badges
 	r := "."
 	for _, v := range [][]string{
-		{TwitchBadgeBroadcaster, "B️"},
+		{TwitchBadgeBroadcaster, "C"},
 		{TwitchBadgeStaff, "X"},
 		{TwitchBadgeGlobalMod, "G"},
 		{TwitchBadgeMod, "M"},

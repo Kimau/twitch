@@ -16,10 +16,10 @@ var ()
 
 // HeartbeatData - Single Beat of the Heart
 type HeartbeatData struct {
-	Time      time.Time
-	IsLive    bool
-	ViewCount int
-	HostList  []ID
+	Time      time.Time `json:"time"`
+	IsLive    bool      `json:"live"`
+	ViewCount int       `json:"view"`
+	HostList  []ID      `json:"hosts"`
 }
 
 // Heartbeat - A beat which captures some data
@@ -27,7 +27,8 @@ type HeartbeatData struct {
 // * Viewer Count
 // * host notifications
 type Heartbeat struct {
-	Beats []HeartbeatData
+	Beats       []HeartbeatData
+	BeatChannel chan int
 
 	internalBeat *time.Ticker
 	client       *Client
@@ -41,6 +42,7 @@ func (heart *Heartbeat) StartBeat() {
 
 	timeSinceDump := time.Duration(0)
 	heart.internalBeat = time.NewTicker(heartBeatRate)
+	heart.BeatChannel = make(chan int)
 
 	// Beat every X minutes
 	for ts := range heart.internalBeat.C {
@@ -71,7 +73,7 @@ func (heart *Heartbeat) beat(t time.Time) {
 
 	// Stream Viewer Count
 	sb, err := heart.client.Stream.GetStreamByUser(heart.client.RoomID)
-	if err != nil || sb == nil || (sb.AverageFPS > 0) {
+	if err != nil || sb == nil || (sb.AverageFPS == 0) {
 		hbd.IsLive = false
 	} else {
 		hbd.IsLive = true
@@ -103,7 +105,7 @@ func (heart *Heartbeat) beat(t time.Time) {
 		}
 
 		if len(newHostNames) > 0 {
-			fmt.Printf("HOST STARTED: %s", strings.Join(newHostNames, ", "))
+			fmt.Printf("HOST STARTED: %s\n", strings.Join(newHostNames, ", "))
 		}
 
 		prevDataPoint = &hbd
@@ -113,5 +115,11 @@ func (heart *Heartbeat) beat(t time.Time) {
 			heart.Beats = append(heart.Beats[1:], hbd)
 		}
 
+	}
+
+	// Create Beat
+	select {
+	case heart.BeatChannel <- (len(heart.Beats) - 1):
+	default: // Non blocking
 	}
 }
