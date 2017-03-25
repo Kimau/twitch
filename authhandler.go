@@ -18,27 +18,27 @@ var (
 
 func (ah *Client) getRootToken(ua *UserAuth) error {
 
-	ua.token = &authToken{}
+	ua.Token = &authToken{}
 
 	tokenContain := &struct {
 		Token *authToken `json:"token"`
-	}{ua.token}
+	}{ua.Token}
 
 	_, err := ah.Get(ua, "", tokenContain)
 	if err != nil {
-		ua.token = nil
+		ua.Token = nil
 		return err
 	}
 
-	if ua.token.IsValid == false {
-		err = fmt.Errorf("Root Response is Invalid: %v ", ua.token)
-		ua.token = nil
+	if ua.Token.IsValid == false {
+		err = fmt.Errorf("Root Response is Invalid: %v ", ua.Token)
+		ua.Token = nil
 		return err
 	}
 
-	if ah.ClientID != ua.token.ClientID {
-		ua.token = nil
-		return fmt.Errorf("Client ID doesn't match [%s:%s]", ah.ClientID, ua.token.ClientID)
+	if ah.ClientID != ua.Token.ClientID {
+		ua.Token = nil
+		return fmt.Errorf("Client ID doesn't match [%s:%s]", ah.ClientID, ua.Token.ClientID)
 	}
 
 	return nil
@@ -50,7 +50,7 @@ func (ah *Client) handleOAuthAdminStart(w http.ResponseWriter, req *http.Request
 		ah.ClientID,
 		fmt.Sprintf(redirStringURL, ah.domain),
 		mergeScopeString(DefaultStreamerScope),
-		ah.AdminAuth.oauthState)
+		ah.AdminAuth.InteralState)
 
 	http.Redirect(w, req, fullRedirStr, http.StatusSeeOther)
 }
@@ -91,13 +91,13 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	isAdmin := false
 	stateVal := authInternalState(stateList[0])
 	// Check if Admin Login
-	if (ah.AdminAuth.token == nil) && stateVal == ah.AdminAuth.oauthState {
+	if (ah.AdminAuth.Token == nil) && stateVal == ah.AdminAuth.InteralState {
 		authU = ah.AdminAuth
 		isAdmin = true
 	} else { // Normal user do logic
 		authU = &UserAuth{
-			oauthState: stateVal,
-			Scopes:     make(map[string]bool),
+			InteralState: stateVal,
+			Scopes:       make(map[string]bool),
 		}
 
 		delete(ah.PendingLogins, stateVal)
@@ -117,7 +117,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 	log.Println(strings.Split(scopeList[0], "\n\t"))
 
 	// Save State
-	authU.token = nil
+	authU.Token = nil
 	authU.updateScope(scopeList)
 	authU.IrcCode = c[0]
 
@@ -128,21 +128,22 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	tID := authU.token.UserID
+	tID := authU.Token.UserID
 	if isAdmin {
-		if ah.AdminAuth.token != nil {
+		if ah.AdminAuth.Token != nil {
+			err := ah.saveToken()
+			if err != nil {
+				log.Fatalf("Unable to save token: %s", err)
+			}
+
 			ah.adminHasAuthed()
 
 			fmt.Fprintf(w, "Admin logged in %s #%s\n---Scope---\n\t%s\n---------\n",
-				authU.token.Username, tID,
+				authU.Token.Username, tID,
 				strings.Join(scopeList, "\n\t"))
 		} else {
 			http.Error(w, "Admin Auth has no token", 400)
 		}
-
-		ah.AdminID = tID
-		ah.GetViewer(tID)
-
 	} else {
 		v := ah.GetViewer(tID)
 		v.Auth = authU
@@ -161,7 +162,7 @@ func (ah *Client) handleOAuthResult(authU *UserAuth) error {
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", fmt.Sprintf(redirStringURL, ah.domain))
 	data.Set("code", authU.IrcCode)
-	data.Set("state", string(authU.oauthState))
+	data.Set("state", string(authU.InteralState))
 	payload := strings.NewReader(data.Encode())
 
 	// Server get Auth Code

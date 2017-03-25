@@ -20,8 +20,8 @@ type viewerProvider interface {
 
 // GetAuthViewer - Returns the account running the bot
 func (ah *Client) GetAuthViewer() *Viewer {
-	if ah.AdminAuth != nil && ah.AdminAuth.token != nil {
-		return ah.Viewers[ah.AdminAuth.token.UserID]
+	if ah.AdminAuth != nil && ah.AdminAuth.Token != nil {
+		return ah.Viewers[ah.AdminAuth.Token.UserID]
 	}
 	return nil
 }

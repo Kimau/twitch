@@ -26,22 +26,22 @@ type authToken struct {
 
 // UserAuth - Used to manage OAuth for Logins
 type UserAuth struct {
-	AuthCode      string
-	IrcCode       string
-	Scopes        map[string]bool
-	SessionCookie *http.Cookie
+	AuthCode      string          `json:"authCode"`
+	IrcCode       string          `json:"ircCode"`
+	Scopes        map[string]bool `json:"scopes"`
+	SessionCookie *http.Cookie    `json:"session_cookie"`
 
-	oauthState authInternalState
-	token      *authToken
+	InteralState authInternalState `json:"interal_state"`
+	Token        *authToken        `json:"token"`
 }
 
 // GetAuth - checks if auth and if auth returns auth code
 func (ua *UserAuth) GetAuth() (bool, string) {
-	if ua.token == nil {
+	if ua.Token == nil {
 		return false, ""
 	}
 
-	return ua.token.IsValid, ua.AuthCode
+	return ua.Token.IsValid, ua.AuthCode
 }
 
 // GetIrcAuth - returns the stuff needed for IRC
@@ -51,7 +51,7 @@ func (ua *UserAuth) GetIrcAuth() (hasauth bool, name string, pass string) {
 		return false, "", ""
 	}
 
-	return true, string(ua.token.Username), "oauth:" + ua.AuthCode
+	return true, string(ua.Token.Username), "oauth:" + ua.AuthCode
 }
 
 func mergeScopeString(scopeList []string) string {
@@ -106,7 +106,7 @@ func (ua *UserAuth) createSessionCookie(domain string) *http.Cookie {
 	expiration := time.Now().Add(365 * 24 * time.Hour)
 	ua.SessionCookie = &http.Cookie{
 		Name:    UserAuthSessionCookieName,
-		Value:   fmt.Sprintf("%s:%s", ua.token.UserID, GenerateRandomString(16)),
+		Value:   fmt.Sprintf("%s:%s", ua.Token.UserID, GenerateRandomString(16)),
 		Domain:  domain, // Wont work for local host because not valid domain
 		Path:    "/twitch",
 		Expires: expiration,

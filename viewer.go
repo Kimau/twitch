@@ -26,8 +26,8 @@ func (vw *Viewer) GetNick() IrcNick {
 		return vw.User.Name
 	}
 
-	if vw.Auth != nil && vw.Auth.token != nil {
-		return vw.Auth.token.Username
+	if vw.Auth != nil && vw.Auth.Token != nil {
+		return vw.Auth.Token.Username
 	}
 
 	return IrcNick("0x" + vw.TwitchID)

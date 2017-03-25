@@ -16,7 +16,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 	log.Println("Twitch ADMIN: ", relPath)
 
 	// Force Auth
-	if ah.AdminAuth.token == nil {
+	if ah.AdminAuth.Token == nil {
 		ah.handleOAuthAdminStart(w, req)
 		return
 	}

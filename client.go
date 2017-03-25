@@ -112,12 +112,18 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 		PendingLogins: make(map[authInternalState]time.Time),
 	}
 
+	// Add Chat log file to writers
+	if err := kb.addChatLogToWriters(); err != nil {
+		return nil, err
+	}
+
 	kb.loadSecrets()
 
+	// Creat Admin Auth Temp
 	kb.AdminAuth = &UserAuth{
-		token:      nil,
-		oauthState: authInternalState(GenerateRandomString(16)),
-		Scopes:     make(map[string]bool),
+		Token:        nil,
+		InteralState: authInternalState(GenerateRandomString(16)),
+		Scopes:       make(map[string]bool),
 	}
 	kb.AdminAuth.updateScope(reqScopes)
 
@@ -125,6 +131,8 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 	kb.Channel = &ChannelsMethod{client: &kb, au: kb.AdminAuth}
 	kb.Stream = &StreamsMethod{client: &kb, au: kb.AdminAuth}
 	kb.Heart = &Heartbeat{client: &kb}
+
+	kb.loadToken()
 
 	return &kb, nil
 }
@@ -185,7 +193,7 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 
 	req.Header.Add("Accept", "application/vnd.twitchtv.v5+json")
 	req.Header.Add("Client-ID", ah.ClientID)
-	if au != nil && au.token != nil {
+	if au != nil && au.Token != nil {
 		req.Header.Add("Authorization", "OAuth "+au.AuthCode)
 	}
 
@@ -214,6 +222,9 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 }
 
 func (ah *Client) adminHasAuthed() {
+	ah.AdminID = ah.AdminAuth.Token.UserID
+	ah.GetViewer(ah.AdminID)
+
 	// Get Room we are Watching
 	roomViewer, err := ah.FindViewer(ah.RoomName)
 	if err != nil {
