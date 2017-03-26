@@ -3,11 +3,41 @@ package twitch
 import (
 	"fmt"
 	"io"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+)
+
+//
+const (
+	ChatLogFormatHTML = `<div class="chatline %s">
+		<span class="time">%2d:%02d:%02d</span>
+		<span class="content">%s</span>
+		</div>`
+	ChatLogFormatMsgHTML = `<div class="chatline %s">
+		<span class="time">%2d:%02d:%02d</span>
+		<span class="id">%s</span>
+		<span class="badge">%s</span>
+		<span class="nick">%s</span>
+		<span class="content">%s</span>
+		</div>`
+	ChatLogFormatMsgExtraHTML = `<div class="chatline %s" coins="%d" style="background:%s;">
+		<span class="time">%2d:%02d:%02d</span>
+		<span class="id">%s</span>
+		<span class="badge">%s</span>
+		<span class="nick">%s</span>
+		<span class="content">%s</span>
+		</div>`
+	ChatLogFormatBadgeHTML = `<span class="%s"></span>`
+	ChatLogFormatString    = "IRC: %2d:%02d:%02d %c%s\n"
+)
+
+var (
+	regexLogMsg = regexp.MustCompile("^IRC: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([^ ])(.*)")
+	// # TwitchID badge nick {emoteString}? [bitString]? : body
+	regexPrivMsg    = regexp.MustCompile("([[:word:]]+) ([[:graph:]]+) ([[:word:]]+)( +\\{[0-9,\\|]+\\})?( +\\[[[:word:]]+\\])? *: (.*)")
+	regexBadgeBreak = regexp.MustCompile("[^ 0-9][0-9]*")
 )
 
 // LogCat - The Type of Log Category message
@@ -21,6 +51,8 @@ const (
 	LogCatMsg      LogCat = '#'
 	LogCatAction   LogCat = '!'
 	LogCatUnknown  LogCat = '?'
+
+	numInteralLogLines int = 1024
 )
 
 // FriendlyName - Produce a friendly name for Cat
@@ -60,43 +92,63 @@ type LogLineParsedMsg struct {
 	Emotes  EmoteReplaceListFromBack
 }
 
-//
-const (
-	ChatLogFormatHTML = `<div class="chatline %s">
-		<span class="time">%2d:%02d:%02d</span>
-		<span class="content">%s</span>
-		</div>`
-	ChatLogFormatMsgHTML = `<div class="chatline %s">
-		<span class="time">%2d:%02d:%02d</span>
-		<span class="id">%s</span>
-		<span class="badge">%s</span>
-		<span class="nick">%s</span>
-		<span class="content">%s</span>
-		</div>`
-	ChatLogFormatMsgExtraHTML = `<div class="chatline %s" coins="%d" style="background:%s;">
-		<span class="time">%2d:%02d:%02d</span>
-		<span class="id">%s</span>
-		<span class="badge">%s</span>
-		<span class="nick">%s</span>
-		<span class="content">%s</span>
-		</div>`
-	ChatLogFormatBadgeHTML = `<span class="%s"></span>`
-	ChatLogFormatString    = "IRC: %2d:%02d:%02d %c%s\n"
-)
+type chatLogInteral struct {
+	MsgLogger []ChatLogger
+	ChatLines [numInteralLogLines]LogLineParsed
+	ChatFile  io.Writer
 
-var (
-	regexLogMsg = regexp.MustCompile("^IRC: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([^ ])(.*)")
-	// # TwitchID badge nick {emoteString}? [bitString]? : body
-	regexPrivMsg    = regexp.MustCompile("([[:word:]]+) ([[:graph:]]+) ([[:word:]]+)( +\\{[0-9,\\|]+\\})?( +\\[[[:word:]]+\\])? *: (.*)")
-	regexBadgeBreak = regexp.MustCompile("[^ 0-9][0-9]*")
-)
+	writeCursor int
+	readCursor  int
+	hasWrapped  bool
+}
+
+// ChatLogger - Write LogLineParsed
+type ChatLogger interface {
+	Write(LogLineParsed) error
+}
+
+// LogLine - Log Line
+func (cli *chatLogInteral) LogLine(llp LogLineParsed) {
+
+	// To avoid reusing memory
+	safeLine := llp
+	if safeLine.Msg != nil {
+		msg := *llp.Msg
+		safeLine.Msg = &msg
+	}
+
+	// Write Line
+	cli.ChatLines[cli.writeCursor] = safeLine
+
+	cli.writeCursor++
+	if cli.writeCursor >= numInteralLogLines {
+		cli.writeCursor -= numInteralLogLines
+		cli.hasWrapped = true
+	}
+	if cli.writeCursor == cli.readCursor {
+		cli.readCursor++
+		if cli.readCursor > numInteralLogLines {
+			cli.readCursor -= numInteralLogLines
+		}
+	}
+
+	fmt.Fprint(cli.ChatFile, safeLine.String())
+
+	for _, w := range cli.MsgLogger {
+		w.Write(safeLine)
+	}
+}
+
+// LogLine - Log to internal message logger
+func (c *Chat) LogLine(llp LogLineParsed) {
+	c.logger.LogLine(llp)
+}
 
 // Log - Log to internal message logger
 func (c *Chat) Log(lvl LogCat, s string) {
 	s = strings.Replace(strings.Replace(s, "\\", "\\\\", -1), "\n", "\\n", -1)
 
-	hour, min, sec := time.Now().Clock()
-	fmt.Fprintf(c.msgLogger, ChatLogFormatString, hour, min, sec, lvl, s)
+	c.logger.LogLine(MakeLogLine(lvl, s))
 }
 
 // Logf - FMT interface
@@ -105,38 +157,65 @@ func (c *Chat) Logf(lvl LogCat, s string, v ...interface{}) {
 }
 
 // ReadChatFull - Dumps the full in memory buffer of chat
-func (c *Chat) ReadChatFull() string {
-	return c.logBuffer.String()
+func (c *Chat) ReadChatFull() []LogLineParsed {
+	if c.logger.hasWrapped {
+		return append(
+			c.logger.ChatLines[c.logger.writeCursor:],
+			c.logger.ChatLines[:c.logger.writeCursor]...)
+	}
+
+	return c.logger.ChatLines[:c.logger.writeCursor]
 }
 
 // ReadChatLine - Read next single Line from Chat
-func (c *Chat) ReadChatLine() string {
-	return c.logBuffer.NextLine()
+func (c *Chat) ReadChatLine() *LogLineParsed {
+	if c.logger.readCursor == c.logger.writeCursor {
+		return nil
+	}
+
+	l := &c.logger.ChatLines[c.logger.readCursor]
+	c.logger.readCursor++
+	if c.logger.readCursor > numInteralLogLines {
+		c.logger.readCursor -= numInteralLogLines
+	}
+
+	return l
 }
 
 // ResetChatCursor - Read next single Line from Chat
 func (c *Chat) ResetChatCursor() {
-	c.logBuffer.ResetCursor()
+	if c.logger.hasWrapped {
+		c.logger.readCursor = c.logger.writeCursor + 1
+		if c.logger.readCursor > numInteralLogLines {
+			c.logger.readCursor -= numInteralLogLines
+		}
+	} else {
+		c.logger.readCursor = 0
+	}
 }
 
-// SetupLogWriter - Set where the log is written to
-func (c *Chat) setupLogWriter(newTarget ...io.Writer) {
-	c.logBuffer = makeCircLineBuffer(1024 * 1024 * 8)
-	c.logBuffer.Reset()
-	if newTarget != nil {
-		writeList := append(newTarget, c.logBuffer)
-		c.msgLogger = io.MultiWriter(writeList...)
-	} else {
-		c.msgLogger = c.logBuffer
+// MakeLogLine - Make Log Line with current time stamped
+func MakeLogLine(cat LogCat, body string) LogLineParsed {
+	h, m, s := time.Now().Clock()
+	return LogLineParsed{
+		Cat:          cat,
+		Body:         body,
+		StampSeconds: h*60*60 + m*60 + s,
+	}
+}
+
+// MakeLogLineMsg - Make Log Line Message with current time stamp
+func MakeLogLineMsg(cat LogCat, msgData LogLineParsedMsg) LogLineParsed {
+	h, m, s := time.Now().Clock()
+	llp := LogLineParsed{
+		Cat:          cat,
+		Body:         "",
+		Msg:          &msgData,
+		StampSeconds: h*60*60 + m*60 + s,
 	}
 
-	if c.msgLogger == nil {
-		log.Fatalln("Log shouldn't be null")
-	}
-
-	ts := time.Now().Format(time.RFC822Z)
-	c.Logf(LogCatSilent, "+------------ New Log [%s] ------------+ %s",
-		c.viewers.GetRoom().GetNick(), ts)
+	llp.UpdateBody()
+	return llp
 }
 
 // ParseLogLine - Parse a Log Line useful for inspection

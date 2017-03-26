@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"os"
+
 	"github.com/go-irc/irc"
 )
 
@@ -72,6 +74,15 @@ var (
 		"@display-name=CohhKittenBot;emotes;mod=1;room-id=26610234;tmi-sent-ts=1489766625363;user-id=91400118;user-type=mod;badges=moderator/1,subscriber/12;color=#FF0000;id=5060a3e9-2d44-42c2-897a-07feb6db6edc;subscriber=1;turbo=0 :cohhkittenbot!cohhkittenbot@cohhkittenbot.tmi.twitch.tv CTCP #cohhcarnage :ACTION curls up for a nap",
 	}
 )
+
+func init() {
+	os.RemoveAll("./test")
+	err := os.MkdirAll("./test/data", os.ModePerm)
+	if err != nil {
+		fmt.Println("Creating Folder", err)
+	}
+	os.Chdir("./test")
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 type DummyAuth struct {
@@ -216,23 +227,43 @@ func TestIrcMessage(t *testing.T) {
 	lastM = ""
 
 	t.Log("___________________________")
-	chat.logBuffer.ResetCursor()
-	for s := chat.logBuffer.NextLine(); len(s) > 0; s = chat.logBuffer.NextLine() {
-		llp, err := ParseLogLine(s)
+
+	for i, llp := range chat.logger.ChatLines {
+		pup, err := ParseLogLine(llp.String())
+
 		if err != nil {
-			t.Logf("LOG LINE PARSE FAIL: %s\n%s", s, err.Error())
+			t.Logf("LOG LINE PARSE FAIL [%d]: \n%s\n%s", i, llp.String(), err.Error())
 			t.Fail()
 			continue
 		}
 
-		s2 := llp.String()
-		if s != s2 {
-			t.Logf("LOG LINE Parse / unparse failed \n%s\n%s", s, s2)
+		if pup.Msg != nil && llp.Msg != nil &&
+			pup.StampSeconds == llp.StampSeconds &&
+			pup.Cat == llp.Cat &&
+			pup.Body == llp.Body &&
+
+			pup.Msg.UserID == llp.Msg.UserID &&
+			pup.Msg.Nick == llp.Msg.Nick &&
+			pup.Msg.Bits == llp.Msg.Bits &&
+			pup.Msg.Badge == llp.Msg.Badge &&
+			pup.Msg.Content == llp.Msg.Content &&
+			len(pup.Msg.Emotes) == len(llp.Msg.Emotes) {
+
+			for i := range pup.Msg.Emotes {
+				if pup.Msg.Emotes[i] != llp.Msg.Emotes[i] {
+					t.Logf("LOG LINE No match [%d] EMOTE:\n%s%s", i, pup.Msg.Emotes, llp.Msg.Emotes)
+					t.Fail()
+				}
+			}
+
+			continue
+		}
+
+		if *pup != llp {
+			t.Logf("LOG LINE No match [%d]: \n%s%s", i, llp.String(), pup.String())
 			t.Fail()
 		}
 	}
-	chat.logBuffer.ResetCursor()
-	t.Log(chat.logBuffer)
 }
 
 func TestEmoteTagProcessor(t *testing.T) {

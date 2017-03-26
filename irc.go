@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"io"
-
 	"github.com/go-irc/irc"
 	"golang.org/x/time/rate"
 )
@@ -47,8 +45,7 @@ type Chat struct {
 	messageOfTheDay []string
 	nameReplyList   []IrcNick
 
-	msgLogger io.Writer
-	logBuffer *circLineBuffer
+	logger chatLogInteral
 
 	viewers viewerProvider
 	irc     *irc.Client
@@ -58,7 +55,7 @@ func init() {
 
 }
 
-func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string, chatWriters []io.Writer) (*Chat, error) {
+func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string, chatWriters []ChatLogger) (*Chat, error) {
 
 	log.Println("Creating IRC Client")
 
@@ -76,9 +73,16 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string,
 			Name: "Full Name",
 		},
 		viewers: vp,
+
+		logger: chatLogInteral{
+			MsgLogger: chatWriters,
+			ChatFile:  getChatLogWriter(vp.GetRoom().GetNick()),
+		},
 	}
 
-	chat.setupLogWriter(chatWriters...)
+	chat.Logf(LogCatSilent, "+------------ New Log [%s] ------------+ %s",
+		chat.viewers.GetRoom().GetNick(), time.Now().Format(time.RFC822Z))
+
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
 
@@ -459,26 +463,24 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		singleBadge := v.Chatter.SingleBadge()
 
 		// Handle Bits
-		bitString := ""
+		bVal := 0
 		bits, ok := m.Tags[TwitchTagBits]
 		if ok {
-			bVal, err := strconv.Atoi(string(bits))
+			bVal, err = strconv.Atoi(string(bits))
 			if err != nil {
 				log.Print("Bits error -", m, err)
-			} else {
-				bitString = fmt.Sprintf(" [%d]", bVal)
+				bVal = 0
 			}
 		}
 
 		// Handle Emotes
-		emoteString := ""
+		var emoList EmoteReplaceListFromBack
 		emoteList, ok := m.Tags[TwitchTagMsgEmotes]
 		if ok {
-			el, err := emoteTagToList(emoteList)
+			emoList, err = emoteTagToList(emoteList)
 			if err != nil {
 				log.Printf("Unable to parse Emote Tag [%s]\n%s", emoteList, err)
-			} else if len(el) > 0 {
-				emoteString = fmt.Sprintf(" {%s}", el)
+				emoList = []EmoteReplace{}
 			}
 		}
 
@@ -486,15 +488,29 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// # 111111 S10 nick emote
 		msgBody := m.Trailing()
 		if strings.HasPrefix(msgBody, "ACTION") {
-			msgBody = strings.TrimLeft(msgBody, "ACTION")
+			c.LogLine(
+				MakeLogLineMsg(LogCatAction,
+					LogLineParsedMsg{
+						UserID:  v.TwitchID,
+						Nick:    v.Chatter.Nick,
+						Bits:    bVal,
+						Badge:   singleBadge,
+						Content: strings.TrimLeft(msgBody, "ACTION"),
+						Emotes:  emoList,
+					}))
 
-			c.Logf(LogCatAction, "%s %s %s%s%s : %s",
-				v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
-				msgBody)
 		} else {
-			c.Logf(LogCatMsg, "%s %s %s%s%s : %s",
-				v.TwitchID, singleBadge, v.Chatter.Nick, emoteString, bitString,
-				msgBody)
+			c.LogLine(
+				MakeLogLineMsg(LogCatMsg,
+					LogLineParsedMsg{
+						UserID:  v.TwitchID,
+						Nick:    v.Chatter.Nick,
+						Bits:    bVal,
+						Badge:   singleBadge,
+						Content: msgBody,
+						Emotes:  emoList,
+					}))
+
 		}
 
 	case IrcCmdNotice:

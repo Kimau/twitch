@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -76,7 +75,7 @@ type Client struct {
 	domain     string
 	servePath  string
 
-	chatWriters []io.Writer
+	chatWriters []ChatLogger
 
 	AdminID      ID
 	AdminAuth    *UserAuth
@@ -97,7 +96,7 @@ type Client struct {
 }
 
 // CreateTwitchClient -
-func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin string, chatWriterList []io.Writer) (*Client, error) {
+func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin string, chatWriterList []ChatLogger) (*Client, error) {
 	kb := Client{
 		domain:    servingFromDomain,
 		servePath: servingFromDomain[strings.Index(servingFromDomain, "/"):],
@@ -110,11 +109,6 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 
 		Viewers:       make(map[ID]*Viewer),
 		PendingLogins: make(map[authInternalState]time.Time),
-	}
-
-	// Add Chat log file to writers
-	if err := kb.addChatLogToWriters(); err != nil {
-		return nil, err
 	}
 
 	kb.loadSecrets()

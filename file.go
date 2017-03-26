@@ -87,17 +87,21 @@ func (ah *Client) saveToken() error {
 	return nil
 }
 
-// addChatLogToWriters - Open the Chat Log for writing and add to writer
-func (ah *Client) addChatLogToWriters() error {
-	chatLogFile, err := os.OpenFile(
-		fmt.Sprintf("./data/%s_chat.log", ah.RoomName),
+// getChatLogWriter - Get Permant Chat Log File
+func getChatLogWriter(roomName IrcNick) *os.File {
+	// Messy that we don't close this
+
+	filename := fmt.Sprintf("./data/%s_chat.log", roomName)
+
+	w, e := os.OpenFile(
+		filename,
 		os.O_CREATE|os.O_APPEND, os.ModePerm)
-	if err != nil {
-		return err
+
+	if e != nil {
+		log.Fatalf("Unable to create chat log: %s\n%s", filename, e)
 	}
 
-	ah.chatWriters = append(ah.chatWriters, chatLogFile)
-	return nil
+	return w
 }
 
 // DumpState - Dump the Internal State to File
