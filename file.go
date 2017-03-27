@@ -104,6 +104,27 @@ func getChatLogWriter(roomName IrcNick) *os.File {
 	return w
 }
 
+var localIrcMsgStoreFile *os.File
+
+// localIrcMsgStore - Simply file Write for raw messages
+func localIrcMsgStore() *os.File {
+	if localIrcMsgStoreFile != nil {
+		return localIrcMsgStoreFile
+	}
+
+	// Messy that we don't close this
+	var err error
+	localIrcMsgStoreFile, err = os.OpenFile(
+		"./data/_irc.log",
+		os.O_CREATE|os.O_APPEND, os.ModePerm)
+
+	if err != nil {
+		log.Fatalf("Unable to create irc log: %s\n%s", "./data/_irc.log", err)
+	}
+
+	return localIrcMsgStoreFile
+}
+
 // DumpState - Dump the Internal State to File
 func (ah *Client) DumpState() error {
 	f, err := os.Create(fmt.Sprintf(dumpFilePattern, ah.RoomName, time.Now().Unix()))

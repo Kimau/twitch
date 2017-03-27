@@ -48,3 +48,13 @@ const (
 func IDFromInt(id int) ID {
 	return ID(fmt.Sprintf("%d", id))
 }
+
+// AlertName - Type of Alert
+type AlertName int
+
+// Alert - The main method to find out when stuff has happened
+type Alert struct {
+	Name   AlertName
+	Source IrcNick
+	Extra  int
+}

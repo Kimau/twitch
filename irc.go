@@ -23,8 +23,7 @@ const (
 var (
 	IrcVerboseMode = false
 
-	regexHostName = regexp.MustCompile(" ([a-z_]+)\\.$")
-	regexHostMsg  = regexp.MustCompile("([[:word:]]+)\\.")
+	regexHostMatch = regexp.MustCompile("([[:word:]]+|-) ([0-9]+)")
 
 	ignoreMsgCmd = map[string]bool{
 		IrcReplyYourhost: false,
@@ -47,8 +46,9 @@ type Chat struct {
 
 	logger chatLogInteral
 
-	viewers viewerProvider
-	irc     *irc.Client
+	viewers       viewerProvider
+	irc           *irc.Client
+	weakClientRef *Client
 }
 
 func init() {
@@ -160,6 +160,37 @@ func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.viewers.GetRoom().GetNick()))
 }
 
+func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) {
+	if c.weakClientRef == nil {
+		log.Printf("Weak Client Ref Missing")
+		return
+	}
+
+	c.weakClientRef.Heart.PostAlert(Alert{aType, src, extra})
+}
+
+func (c *Chat) hostUpdate(src IrcNick, target IrcNick, numViewers int) error {
+
+	roomNick := c.viewers.GetRoom().GetNick()
+	if src == roomNick {
+		// You are now hosting
+		c.Logf(LogCatSystem, "You are hosting %s with %d viewers", target, numViewers)
+
+	} else if target == roomNick {
+		// You are being hosted by Src
+		c.Logf(LogCatSystem, "%s is now hosting you with %d viewers", src, numViewers)
+		c.forwardAlert(AlertHost, src, numViewers)
+
+	} else if target == "-" {
+		// Src is no longer hosting you
+		c.Logf(LogCatSystem, "%s stopped hosting", src)
+	} else {
+		return fmt.Errorf("Something went wrong with this message")
+	}
+
+	return nil
+}
+
 func (c *Chat) nowHosting(target *Viewer) {
 	c.mode.hosting = target
 
@@ -253,6 +284,8 @@ func (c *Chat) processNameList() {
 
 // Handle - IRC Message
 func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
+	fmt.Fprint(localIrcMsgStore(), m)
+
 	printOut, ok := ignoreMsgCmd[m.Command]
 	if ok {
 		if printOut {
@@ -405,16 +438,19 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.Logf(LogCatSystem, "User State updated from %s in %s", v.GetNick(), m.Trailing())
 
 	case TwitchCmdHostTarget:
-		match := regexHostName.FindStringSubmatch(m.Trailing())
-		if match != nil {
-			nick := IrcNick(match[1])
-			v, err := c.viewers.FindViewer(nick)
-			if err != nil {
-				log.Printf("HOST ERROR [%s] not found\n%s", nick, err)
-				return
-			}
-			c.nowHosting(v)
+		channelDoingTheHost := m.Params[0]
+		subs := regexHostMatch.FindStringSubmatch(m.Trailing())
+		if len(subs) != 3 {
+			log.Printf("HOST ERROR - Parsing [%s]\n%s", subs, m)
+			return
 		}
+
+		viewers, err := strconv.Atoi(subs[2])
+		if err != nil {
+			log.Printf("HOST ERROR - Parsing [%s]\n%s", subs[2], m)
+		}
+
+		c.hostUpdate(IrcNick(channelDoingTheHost), IrcNick(subs[1]), viewers)
 
 	case TwitchCmdReconnect:
 		printDebugTag(m)
@@ -471,6 +507,10 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				log.Print("Bits error -", m, err)
 				bVal = 0
 			}
+
+			if bVal > 0 {
+				c.forwardAlert(AlertBits, v.Chatter.Nick, bVal)
+			}
 		}
 
 		// Handle Emotes
@@ -520,22 +560,14 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 		switch msgID {
+		// Notice Host Messages - Not reacting to these because they lack the viewer count
 		case TwitchMsgHostOffline:
 			c.Log(LogCatSystem, m.Trailing())
-			c.nowHosting(nil)
-
 		case TwitchMsgHostOff:
-			c.nowHosting(nil)
-
+			c.Log(LogCatSystem, m.Trailing())
 		case TwitchMsgHostOn:
-			nick := regexHostMsg.FindStringSubmatch(m.Trailing())
-			v, err := c.viewers.FindViewer(IrcNick(nick[1]))
-			if err != nil {
-				log.Printf("HOST MSG ON ERROR [%s] not found\n%s", nick[1], err)
-				return
-			}
-
-			c.nowHosting(v)
+			c.Log(LogCatSystem, m.Trailing())
+			/////////
 
 		case TwitchMsgR9kOff:
 			c.mode.r9k = false

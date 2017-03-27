@@ -391,3 +391,11 @@ const (
 	TwitchTypeAdmin     = "admin"
 	TwitchTypeStaff     = "staff"
 )
+
+// Alert Name Types
+const (
+	AlertHost   AlertName = 100
+	AlertSub    AlertName = 200
+	AlertFollow AlertName = 300
+	AlertBits   AlertName = 400
+)

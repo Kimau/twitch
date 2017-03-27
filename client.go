@@ -244,6 +244,7 @@ func (ah *Client) startNewChat() {
 		return
 	}
 	ah.Chat = c
+	ah.Chat.weakClientRef = ah
 
 	err = ah.Chat.StartRunLoop()
 	if err != nil {
