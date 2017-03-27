@@ -284,7 +284,7 @@ func (c *Chat) processNameList() {
 
 // Handle - IRC Message
 func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
-	fmt.Fprint(localIrcMsgStore(), m)
+	fmt.Fprintln(localIrcMsgStore(), m)
 
 	printOut, ok := ignoreMsgCmd[m.Command]
 	if ok {
@@ -610,6 +610,10 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 		case TwitchMsgUnrecognizedCmd:
 			c.Log(LogCatSilent, m.Trailing())
+
+		case TwitchUserNoticeReSub:
+			// TODO :: Add reaction hook
+			c.Log(LogCatSystem, m.Trailing())
 
 		/*
 			case 		 TwitchMsgAlreadyBanned      :

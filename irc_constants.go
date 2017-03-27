@@ -394,6 +394,7 @@ const (
 
 // Alert Name Types
 const (
+	AlertNone   AlertName = 0
 	AlertHost   AlertName = 100
 	AlertSub    AlertName = 200
 	AlertFollow AlertName = 300

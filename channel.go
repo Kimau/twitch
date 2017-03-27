@@ -126,6 +126,11 @@ func (c *ChannelsMethod) GetEditors(id ID) ([]User, error) {
 
 // GetFollowers - Returns the Followers for a Channel
 func (c *ChannelsMethod) GetFollowers(id ID, limit int, newestFirst bool) ([]ChannelFollow, int, error) {
+	return c.GetFollowersWithOffset(id, limit, 0, newestFirst)
+}
+
+// GetFollowersWithOffset - Returns the Followers for a Channel starting at offset
+func (c *ChannelsMethod) GetFollowersWithOffset(id ID, limit int, offset int, newestFirst bool) ([]ChannelFollow, int, error) {
 
 	reqPageLimit := limit
 	if limit < 0 {
@@ -147,7 +152,6 @@ func (c *ChannelsMethod) GetFollowers(id ID, limit int, newestFirst bool) ([]Cha
 
 	compiledList := []ChannelFollow{}
 
-	offset := 0
 	for limit < 0 || offset < limit {
 
 		_, err := c.client.Get(c.au,

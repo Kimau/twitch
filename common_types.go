@@ -14,6 +14,9 @@ type IrcNick string
 // Currency use to track viewer Value
 type Currency int
 
+// AlertName - Type of Alert
+type AlertName int
+
 // WebClient - Provides basic Request Poster
 type WebClient interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -47,14 +50,4 @@ const (
 // Some older API return a number
 func IDFromInt(id int) ID {
 	return ID(fmt.Sprintf("%d", id))
-}
-
-// AlertName - Type of Alert
-type AlertName int
-
-// Alert - The main method to find out when stuff has happened
-type Alert struct {
-	Name   AlertName
-	Source IrcNick
-	Extra  int
 }

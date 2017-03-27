@@ -23,6 +23,30 @@ type HeartbeatData struct {
 	HostList  []ID      `json:"hosts"`
 }
 
+// Alert - The main method to find out when stuff has happened
+type Alert struct {
+	Name   AlertName `json:"name"`
+	Source IrcNick   `json:"source"`
+	Extra  int       `json:"extra"`
+}
+
+func (a Alert) String() string {
+	switch a.Name {
+	case AlertNone:
+		return fmt.Sprintf("None: %s %d", a.Source, a.Extra)
+	case AlertHost:
+		return fmt.Sprintf("Host: %s %d", a.Source, a.Extra)
+	case AlertSub:
+		return fmt.Sprintf("Sub: %s %d", a.Source, a.Extra)
+	case AlertFollow:
+		return fmt.Sprintf("Follow: %s %d", a.Source, a.Extra)
+	case AlertBits:
+		return fmt.Sprintf("Bits: %s %d", a.Source, a.Extra)
+	}
+
+	return fmt.Sprintf("BROKEN ALERT: %s %d", a.Source, a.Extra)
+}
+
 // Heartbeat - A beat which captures some data
 // * Live Status
 // * Viewer Count
@@ -129,7 +153,8 @@ func (heart *Heartbeat) beat(t time.Time) {
 	}
 
 	// Get Channel Followers
-	fList, num, err := heart.client.Channel.GetFollowers(heart.client.RoomID, 10, true)
+
+	fList, num, err := heart.client.Channel.GetFollowers(heart.client.RoomID, 30, true)
 	// Check for new followers
 	adjustedTotal := num
 	for _, f := range fList {
@@ -142,6 +167,8 @@ func (heart *Heartbeat) beat(t time.Time) {
 			// New Follow
 			heart.PostAlert(Alert{AlertFollow, f.User.Name, 0})
 			adjustedTotal--
+		} else {
+			break
 		}
 	}
 
@@ -192,4 +219,10 @@ func (heart *Heartbeat) beat(t time.Time) {
 	} else {
 		heart.Beats = append(heart.Beats[1:], hbd)
 	}
+
+	heart.PostAlert(Alert{
+		Name:   AlertNone,
+		Source: heart.client.RoomName,
+		Extra:  len(heart.Beats) - 1,
+	})
 }
