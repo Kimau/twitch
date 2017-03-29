@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 )
 
 type viewerProvider interface {
@@ -11,8 +12,8 @@ type viewerProvider interface {
 	GetRoom() *Viewer
 
 	GetViewer(ID) *Viewer
-	GetViewerFromChatter(*Chatter) *Viewer
-	GetViewerFromUser(*User) *Viewer
+	GetViewerFromChatter(Chatter) *Viewer
+	GetViewerFromUser(User) *Viewer
 
 	FindViewer(IrcNick) (*Viewer, error)
 	UpdateViewers([]IrcNick) []*Viewer
@@ -34,21 +35,25 @@ func (ah *Client) GetRoom() *Viewer {
 // GetViewer - Get Viewer by ID
 func (ah *Client) GetViewer(twitchID ID) *Viewer {
 	v, ok := ah.Viewers[twitchID]
-	if !ok {
-		u, err := ah.User.Get(twitchID)
-		if err != nil {
-			log.Printf("Unable to get User %s\n%s", twitchID, err.Error())
-			return nil
-		}
-
-		v = ah.GetViewerFromUser(u)
+	if ok {
+		return v
 	}
 
-	return v
+	u, err := ah.User.Get(twitchID)
+	if err != nil {
+		log.Printf("Unable to get User %s\n%s", twitchID, err.Error())
+		return nil
+	}
+
+	if u == nil {
+		return nil
+	}
+
+	return ah.GetViewerFromUser(*u)
 }
 
 // GetViewerFromUser - Get Viewer from User
-func (ah *Client) GetViewerFromUser(usr *User) *Viewer {
+func (ah *Client) GetViewerFromUser(usr User) *Viewer {
 	v, ok := ah.Viewers[usr.ID]
 
 	if ok {
@@ -57,7 +62,7 @@ func (ah *Client) GetViewerFromUser(usr *User) *Viewer {
 		v = &Viewer{
 			TwitchID: usr.ID,
 			client:   ah,
-			User:     usr,
+			User:     &usr,
 		}
 
 		ah.Viewers[usr.ID] = v
@@ -67,10 +72,10 @@ func (ah *Client) GetViewerFromUser(usr *User) *Viewer {
 }
 
 // GetViewerFromChatter - Get Viewer from Chatter
-func (ah *Client) GetViewerFromChatter(cu *Chatter) *Viewer {
+func (ah *Client) GetViewerFromChatter(cu Chatter) *Viewer {
 	if cu.id != "" {
 		v := ah.GetViewer(cu.id)
-		v.Chatter = cu
+		v.Chatter = &cu
 		return v
 	} else if cu.Nick != "" {
 		v, err := ah.FindViewer(cu.Nick)
@@ -78,7 +83,7 @@ func (ah *Client) GetViewerFromChatter(cu *Chatter) *Viewer {
 			log.Printf("GetViewerFromChatter - unable to get from nick [%s] \n%s", cu.Nick, err)
 			return nil
 		}
-		v.Chatter = cu
+		v.Chatter = &cu
 		return v
 	} else if cu.DisplayName != "" {
 		v, err := ah.FindViewer(IrcNick(cu.DisplayName))
@@ -86,7 +91,7 @@ func (ah *Client) GetViewerFromChatter(cu *Chatter) *Viewer {
 			log.Printf("GetViewerFromChatter - unable to get from display name [%s] \n%s", cu.DisplayName, err)
 			return nil
 		}
-		v.Chatter = cu
+		v.Chatter = &cu
 		return v
 	}
 
@@ -120,7 +125,7 @@ func (ah *Client) FindViewer(nick IrcNick) (*Viewer, error) {
 		return nil, fmt.Errorf("No user found called: %s", nick)
 	}
 
-	return ah.GetViewerFromUser(&userList[0]), nil
+	return ah.GetViewerFromUser(userList[0]), nil
 }
 
 // UpdateViewers - Update Viewers from list of Names
@@ -152,26 +157,45 @@ func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
 	}
 
 	// Get Viewer
-	for i := range userList {
-		vList = append(vList, ah.GetViewerFromUser(&userList[i]))
+	for _, u := range userList {
+		vList = append(vList, ah.GetViewerFromUser(u))
 	}
 
 	return vList
 }
 
+func (ah *Client) updateFollowerCache(f ChannelFollow) error {
+	v := ah.GetViewerFromUser(*f.User)
+	v.Follower = &f
+
+	fTime, err := time.Parse(time.RFC3339, f.CreatedAtString)
+	if err != nil {
+		return err
+	}
+	ah.FollowerCache[v.TwitchID] = fTime
+
+	return nil
+}
+
 // UpdateFollowers - Update all the channels followers
 func (ah *Client) UpdateFollowers() (int, error) {
-	followers, numFollowers, err := ah.Channel.GetFollowers(ah.RoomID, -1, true)
 
-	for _, f := range followers {
-		v, ok := ah.Viewers[f.User.ID]
-		if !ok {
-			v = ah.GetViewerFromUser(f.User)
+	// Cycle through all the Viewers
+	for _, v := range ah.Viewers {
+		if v.Follower != nil {
+			ah.updateFollowerCache(*v.Follower)
 		}
-
-		v.User = f.User
-		v.Follower = &f
 	}
 
-	return numFollowers, err
+	followers, numFollowers, err := ah.Channel.GetFollowers(ah.RoomID, -1, true)
+	if err != nil {
+		return numFollowers, err
+	}
+
+	// Update Users and Follow Status
+	for _, f := range followers {
+		ah.updateFollowerCache(f)
+	}
+
+	return numFollowers, nil
 }

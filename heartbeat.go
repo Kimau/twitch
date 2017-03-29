@@ -58,6 +58,7 @@ type Heartbeat struct {
 	recentAlerts   []Alert
 
 	prevFollowCount int
+	followers       []ChannelFollow
 
 	internalBeat *time.Ticker
 	client       *Client
@@ -153,21 +154,25 @@ func (heart *Heartbeat) beat(t time.Time) {
 	}
 
 	// Get Channel Followers
-
+	// If there are more then 30 follows in a SECOND who cares
 	fList, num, err := heart.client.Channel.GetFollowers(heart.client.RoomID, 30, true)
+
 	// Check for new followers
 	adjustedTotal := num
 	for _, f := range fList {
-		whenFollow, err := time.Parse(time.RFC3339, f.CreatedAtString)
+		err := heart.client.updateFollowerCache(f)
 		if err != nil {
-			log.Printf("ERROR - Parsing Timestamp: %s", f.CreatedAtString)
+			log.Printf("ERROR - Updating Follow Cache: %s\n%s", f.CreatedAtString, err)
 		}
 
-		if whenFollow.After(prevDataPoint.Time) {
+		fTime, ok := heart.client.FollowerCache[f.User.ID]
+
+		if ok && fTime.After(prevDataPoint.Time) {
 			// New Follow
 			heart.PostAlert(Alert{AlertFollow, f.User.Name, 0})
 			adjustedTotal--
 		} else {
+			// Avoid 99% of the work
 			break
 		}
 	}

@@ -2,6 +2,11 @@ package twitch
 
 import "fmt"
 
+const (
+	// SoftCapOnFollowGrab - Implicit Soft Cap on Follower requests can be overridden by specificy a limit but in the case of a -1 it will be set to this
+	SoftCapOnFollowGrab = 2000
+)
+
 // GetMe               | Get Channel                      | Gets a channel object based on the OAuth token provided.
 // Get                 | Get Channel by ID                | Gets a specified channel object.
 // Update              | Update Channel                   | Updates specified properties of a specified channel.
@@ -147,17 +152,30 @@ func (c *ChannelsMethod) GetFollowersWithOffset(id ID, limit int, offset int, ne
 
 	followList := struct {
 		Total   int             `json:"_total,omitempty"`
+		Cursor  string          `json:"_cursor,omitempty"`
 		Follows []ChannelFollow `json:"follows"`
 	}{}
 
 	compiledList := []ChannelFollow{}
-
 	for limit < 0 || offset < limit {
 
-		_, err := c.client.Get(c.au,
-			fmt.Sprintf("channels/%s/follows?limit=%d&offset=%d&direction=%s",
-				id, reqPageLimit, offset, reqOrder), &followList)
+		reqURL := fmt.Sprintf("channels/%s/follows?limit=%d&offset=%d&direction=%s",
+			id, reqPageLimit, offset, reqOrder)
+		if len(followList.Cursor) > 0 {
+			reqURL = fmt.Sprintf("channels/%s/follows?limit=%d&cursor=%s",
+				id, reqPageLimit, followList.Cursor)
+		}
+
+		// Can be overridden by passing explicit limit
+		if limit < 0 && followList.Total > SoftCapOnFollowGrab {
+			limit = SoftCapOnFollowGrab
+		}
+
+		_, err := c.client.Get(c.au, reqURL, &followList)
+
 		if err != nil {
+			fmt.Printf("ID:%s \n    limit: %d \n  offset:%d \n  err: %s", id, limit, offset, err)
+
 			return compiledList, followList.Total, err
 		}
 

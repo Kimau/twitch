@@ -2,9 +2,39 @@ package twitch
 
 import (
 	"encoding/json"
+	"fmt"
+	"math/rand"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+// generateDummyID - Useful for testing
+func generateDummyID() ID {
+	x := rand.Intn(10000000) + 10000000
+	return ID(fmt.Sprintf("%d", x))
+}
+
+func selectRand(inList []interface{}) interface{} {
+	return inList[rand.Intn(len(inList))]
+}
+
+// User - Twitch User
+func generateDummyUser() User {
+
+	return User{
+		ID:          generateDummyID(),
+		Name:        IrcNick(GenerateRandomString(16)),
+		DisplayName: GenerateRandomString(16),
+		Bio:         GenerateRandomString(64),
+
+		Logo:     "https://static-cdn.jtvnw.net/jtv_user_pictures/dallas-profile_image-1a2c906ee2c35f12-300x300.png",
+		UserType: TwitchTypeMod,
+
+		CreatedAtString: "2013-06-03T19:12:02Z",
+		UpdatedAtStr:    "2016-12-14T01:01:44Z",
+	}
+}
 
 func TestUserFull(t *testing.T) {
 
@@ -122,5 +152,28 @@ func TestUserFull(t *testing.T) {
 	if testUser.Notification.Push != user.Notification.Push {
 		t.Fail()
 		t.Logf("Notification.Push [%s:%s] not equal", testUser.Notification.Push, user.Notification.Push)
+	}
+}
+
+func TestUsersMethod_GetMe(t *testing.T) {
+	tests := []struct {
+		name    string
+		u       *UsersMethod
+		want    *UserFull
+		wantErr bool
+	}{
+	// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.u.GetMe()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UsersMethod.GetMe() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("UsersMethod.GetMe() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

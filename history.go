@@ -40,12 +40,12 @@ func (hvd *HistoricViewerData) GetViewer(id ID) *Viewer {
 }
 
 // GetViewerFromChatter  - Get Viewer from Chatter ID
-func (hvd *HistoricViewerData) GetViewerFromChatter(cu *Chatter) *Viewer {
+func (hvd *HistoricViewerData) GetViewerFromChatter(cu Chatter) *Viewer {
 	return hvd.GetViewer(cu.id)
 }
 
 // GetViewerFromUser - Get Viewer from User ID (no update)
-func (hvd *HistoricViewerData) GetViewerFromUser(u *User) *Viewer {
+func (hvd *HistoricViewerData) GetViewerFromUser(u User) *Viewer {
 	return hvd.GetViewer(u.ID)
 }
 

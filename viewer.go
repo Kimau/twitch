@@ -47,12 +47,20 @@ func (vw *Viewer) UpdateUser() error {
 
 // UpdateFollowStatus - Update Follower Status
 func (vw *Viewer) UpdateFollowStatus() (bool, error) {
-
 	cFollow, err := vw.client.User.IsFollowing(vw.TwitchID, vw.client.RoomID)
 	if err != nil {
 		return false, err
 	}
 
-	vw.Follower = cFollow
-	return (vw.Follower != nil), nil
+	if vw.Follower != nil {
+		vw.client.updateFollowerCache(*cFollow)
+		return true, nil
+	}
+
+	_, ok := vw.client.FollowerCache[vw.TwitchID]
+	if ok {
+		delete(vw.client.FollowerCache, vw.TwitchID)
+	}
+
+	return false, nil
 }

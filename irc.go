@@ -367,7 +367,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case TwitchCmdGlobalUserState:
 		cu := createChatter(IrcNick(m.Name), m)
-		v := c.viewers.GetViewerFromChatter(cu)
+		v := c.viewers.GetViewerFromChatter(*cu)
 		c.Logf(LogCatSilent, "Global User State for %s", v.GetNick())
 
 	case TwitchCmdRoomState:
@@ -427,12 +427,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case TwitchCmdUserNotice:
 		cu := createChatter(IrcNick(m.Name), m)
-		c.viewers.GetViewerFromChatter(cu)
+		c.viewers.GetViewerFromChatter(*cu)
 		c.Logf(LogCatSystem, "%s", m.Tags[TwitchTagSystemMsg])
 
 	case TwitchCmdUserState:
 		cu := createChatter(IrcNick(m.Name), m)
-		v := c.viewers.GetViewerFromChatter(cu)
+		v := c.viewers.GetViewerFromChatter(*cu)
 
 		c.InRoom[v.GetNick()] = v
 		c.Logf(LogCatSystem, "User State updated from %s in %s", v.GetNick(), m.Trailing())

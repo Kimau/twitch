@@ -86,6 +86,7 @@ type Client struct {
 	RoomStream *StreamBody
 
 	Viewers       map[ID]*Viewer
+	FollowerCache map[ID]time.Time
 	PendingLogins map[authInternalState]time.Time
 
 	Chat    *Chat
@@ -108,6 +109,7 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 		AdminChannel: make(chan int, 3),
 
 		Viewers:       make(map[ID]*Viewer),
+		FollowerCache: make(map[ID]time.Time),
 		PendingLogins: make(map[authInternalState]time.Time),
 	}
 
@@ -225,6 +227,9 @@ func (ah *Client) adminHasAuthed() {
 		log.Fatalf("Unable to find room [%s]\n%s", ah.RoomName, err)
 	}
 	ah.RoomID = roomViewer.TwitchID
+
+	//
+	ah.UpdateFollowers()
 
 	// Start up IRC Chat
 	if ah.AdminAuth.Scopes[scopeChatLogin] {
