@@ -160,13 +160,12 @@ func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.viewers.GetRoom().GetNick()))
 }
 
-func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) {
+func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
 	if c.weakClientRef == nil {
-		log.Printf("Weak Client Ref Missing")
-		return
+		return fmt.Errorf("Weak Client Ref Missing")
 	}
 
-	c.weakClientRef.Heart.PostAlert(Alert{aType, src, extra})
+	return c.weakClientRef.Heart.PostAlert(Alert{aType, src, extra})
 }
 
 func (c *Chat) hostUpdate(src IrcNick, target IrcNick, numViewers int) error {

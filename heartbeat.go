@@ -31,20 +31,25 @@ type Alert struct {
 }
 
 func (a Alert) String() string {
+	return fmt.Sprintf("%s: %s %d", a.NameString(), a.Source, a.Extra)
+}
+
+// NameString - Gives Label for Type
+func (a Alert) NameString() string {
 	switch a.Name {
 	case AlertNone:
-		return fmt.Sprintf("None: %s %d", a.Source, a.Extra)
+		return "None"
 	case AlertHost:
-		return fmt.Sprintf("Host: %s %d", a.Source, a.Extra)
+		return "Host"
 	case AlertSub:
-		return fmt.Sprintf("Sub: %s %d", a.Source, a.Extra)
+		return "Sub:"
 	case AlertFollow:
-		return fmt.Sprintf("Follow: %s %d", a.Source, a.Extra)
+		return "Follow"
 	case AlertBits:
-		return fmt.Sprintf("Bits: %s %d", a.Source, a.Extra)
+		return "Bits"
 	}
 
-	return fmt.Sprintf("BROKEN ALERT: %s %d", a.Source, a.Extra)
+	return "UNKNOWN"
 }
 
 // Heartbeat - A beat which captures some data
@@ -55,7 +60,7 @@ type Heartbeat struct {
 	Beats []HeartbeatData
 
 	subbedToAlerts []chan Alert
-	recentAlerts   []Alert
+	AlertsRecent   []Alert
 
 	prevFollowCount int
 	followers       []ChannelFollow
@@ -102,28 +107,35 @@ func (heart *Heartbeat) SubToAlerts() chan Alert {
 }
 
 // PostAlert - Post Alert to Listeners
-func (heart *Heartbeat) PostAlert(newAlert Alert) {
-	// Sanity Check to avoid doubling of Alerts
-	for _, a := range heart.recentAlerts {
-		if (a.Name == newAlert.Name) && (a.Source == newAlert.Source) {
-			log.Printf("Doubling of Alerts: \n%s\n%s", a, newAlert)
-			return
+func (heart *Heartbeat) PostAlert(newAlert Alert) error {
+
+	// Exception for None just forward it
+	if newAlert.Name != AlertNone {
+
+		// Sanity Check to avoid doubling of Alerts
+		for _, a := range heart.AlertsRecent {
+			if (a.Name == newAlert.Name) && (a.Source == newAlert.Source) {
+				return fmt.Errorf("Doubling of Prev Alert: %s", a)
+			}
+		}
+
+		// Add to Recent Alerts
+		if len(heart.AlertsRecent) > 10 {
+			heart.AlertsRecent = append(heart.AlertsRecent[:9], newAlert)
+		} else {
+			heart.AlertsRecent = append(heart.AlertsRecent, newAlert)
 		}
 	}
 
-	if len(heart.recentAlerts) > 10 {
-		heart.recentAlerts = append(heart.recentAlerts[:9], newAlert)
-	} else {
-		heart.recentAlerts = append(heart.recentAlerts, newAlert)
-	}
-
-	//
+	// Forward Alert
 	for _, c := range heart.subbedToAlerts {
 		select {
 		case c <- newAlert:
 		default: // Non blocking
 		}
 	}
+
+	return nil
 }
 
 func (heart *Heartbeat) beat(t time.Time) {
@@ -169,7 +181,11 @@ func (heart *Heartbeat) beat(t time.Time) {
 
 		if ok && fTime.After(prevDataPoint.Time) {
 			// New Follow
-			heart.PostAlert(Alert{AlertFollow, f.User.Name, 0})
+			err := heart.PostAlert(Alert{AlertFollow, f.User.Name, 0})
+			if err != nil {
+				log.Printf("Double Follow Error: %s %s %s\n %s",
+					prevDataPoint.Time, fTime, f.CreatedAtString, err)
+			}
 			adjustedTotal--
 		} else {
 			// Avoid 99% of the work
@@ -205,10 +221,13 @@ func (heart *Heartbeat) beat(t time.Time) {
 				}
 			}
 		} else {
-			heart.PostAlert(Alert{
+			err := heart.PostAlert(Alert{
 				Name:   AlertHost,
 				Source: IrcNick(h.HostLogin),
 				Extra:  0})
+			if err != nil {
+				log.Printf("ERROR - Host Doubled: %s", err)
+			}
 			newHostNames = append(newHostNames, h.HostLogin)
 		}
 	}
@@ -225,9 +244,13 @@ func (heart *Heartbeat) beat(t time.Time) {
 		heart.Beats = append(heart.Beats[1:], hbd)
 	}
 
-	heart.PostAlert(Alert{
+	err = heart.PostAlert(Alert{
 		Name:   AlertNone,
 		Source: heart.client.RoomName,
 		Extra:  len(heart.Beats) - 1,
 	})
+
+	if err != nil {
+		log.Printf("ERROR - Heartbeat alert failed: %s", err)
+	}
 }

@@ -135,6 +135,10 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 
 // GetAuth - Returns Auth Code not sure if this is okay but I need it for twitch interaction
 func (ah *Client) GetAuth() string {
+	if ah.AdminAuth == nil {
+		return ""
+	}
+
 	b, c := ah.AdminAuth.GetAuth()
 	if b {
 		return c

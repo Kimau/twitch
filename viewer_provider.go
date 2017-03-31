@@ -57,7 +57,7 @@ func (ah *Client) GetViewerFromUser(usr User) *Viewer {
 	v, ok := ah.Viewers[usr.ID]
 
 	if ok {
-		log.Printf("Attempting to Create %s that already exsists: %s", usr.DisplayName, usr.ID)
+		v.User = &usr
 	} else {
 		v = &Viewer{
 			TwitchID: usr.ID,
