@@ -94,6 +94,7 @@ type Client struct {
 	Channel *ChannelsMethod
 	Stream  *StreamsMethod
 	Heart   *Heartbeat
+	Alerts  *AlertPump
 }
 
 // CreateTwitchClient -
@@ -127,6 +128,7 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 	kb.Channel = &ChannelsMethod{client: &kb, au: kb.AdminAuth}
 	kb.Stream = &StreamsMethod{client: &kb, au: kb.AdminAuth}
 	kb.Heart = &Heartbeat{client: &kb}
+	kb.Alerts = StartAlertPump(&kb)
 
 	kb.loadToken()
 

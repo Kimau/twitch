@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,44 +24,13 @@ type HeartbeatData struct {
 	HostList  []ID      `json:"hosts"`
 }
 
-// Alert - The main method to find out when stuff has happened
-type Alert struct {
-	Name   AlertName `json:"name"`
-	Source IrcNick   `json:"source"`
-	Extra  int       `json:"extra"`
-}
-
-func (a Alert) String() string {
-	return fmt.Sprintf("%s: %s %d", a.NameString(), a.Source, a.Extra)
-}
-
-// NameString - Gives Label for Type
-func (a Alert) NameString() string {
-	switch a.Name {
-	case AlertNone:
-		return "None"
-	case AlertHost:
-		return "Host"
-	case AlertSub:
-		return "Sub:"
-	case AlertFollow:
-		return "Follow"
-	case AlertBits:
-		return "Bits"
-	}
-
-	return "UNKNOWN"
-}
-
 // Heartbeat - A beat which captures some data
 // * Live Status
 // * Viewer Count
 // * host notifications
 type Heartbeat struct {
-	Beats []HeartbeatData
-
-	subbedToAlerts []chan Alert
-	AlertsRecent   []Alert
+	beats     []HeartbeatData
+	heartLock sync.RWMutex
 
 	prevFollowCount int
 	followers       []ChannelFollow
@@ -71,8 +41,6 @@ type Heartbeat struct {
 
 // StartBeat - Blocking Loop Which
 func (heart *Heartbeat) StartBeat() {
-
-	heart.subbedToAlerts = []chan Alert{}
 	heart.prevFollowCount = -1
 
 	// First Beat
@@ -98,59 +66,37 @@ func (heart *Heartbeat) StartBeat() {
 	}
 }
 
-// SubToAlerts - Call to get a sub channel to the alert
-func (heart *Heartbeat) SubToAlerts() chan Alert {
-	newSub := make(chan Alert, 10)
-	heart.subbedToAlerts = append(heart.subbedToAlerts, newSub)
-
-	return newSub
+// GetBeat - Get Sepecific Beat
+func (heart *Heartbeat) GetBeat(beatNum int) HeartbeatData {
+	heart.heartLock.RLock()
+	defer heart.heartLock.RUnlock()
+	return heart.beats[beatNum]
 }
 
-// PostAlert - Post Alert to Listeners
-func (heart *Heartbeat) PostAlert(newAlert Alert) error {
+// GetAllBeats - Get All the Beats
+func (heart *Heartbeat) GetAllBeats() (res []HeartbeatData) {
+	heart.heartLock.RLock()
+	defer heart.heartLock.RUnlock()
 
-	// Exception for None just forward it
-	if newAlert.Name != AlertNone {
-
-		// Sanity Check to avoid doubling of Alerts
-		for _, a := range heart.AlertsRecent {
-			if (a.Name == newAlert.Name) && (a.Source == newAlert.Source) {
-				return fmt.Errorf("Doubling of Prev Alert: %s", a)
-			}
-		}
-
-		// Add to Recent Alerts
-		if len(heart.AlertsRecent) > 10 {
-			heart.AlertsRecent = append(heart.AlertsRecent[:9], newAlert)
-		} else {
-			heart.AlertsRecent = append(heart.AlertsRecent, newAlert)
-		}
-	}
-
-	// Forward Alert
-	for _, c := range heart.subbedToAlerts {
-		select {
-		case c <- newAlert:
-		default: // Non blocking
-		}
-	}
-
-	return nil
+	copy(res, heart.beats)
+	return res
 }
 
 func (heart *Heartbeat) beat(t time.Time) {
+	heart.heartLock.Lock()
+	defer heart.heartLock.Unlock()
 
 	var prevDataPoint *HeartbeatData
-	if len(heart.Beats) > 0 {
-		prevDataPoint = &heart.Beats[len(heart.Beats)-1]
+	if len(heart.beats) > 0 {
+		prevDataPoint = &heart.beats[len(heart.beats)-1]
 	}
 
 	// Stream Viewer Count
 	sb, err := heart.client.Stream.GetStreamByUser(heart.client.RoomID)
 	if err != nil || sb == nil || (sb.AverageFPS == 0) {
 		if prevDataPoint == nil || prevDataPoint.IsLive {
-			heart.Beats = append(heart.Beats, HeartbeatData{Time: t})
-			prevDataPoint = &heart.Beats[len(heart.Beats)-1]
+			heart.beats = append(heart.beats, HeartbeatData{Time: t})
+			prevDataPoint = &heart.beats[len(heart.beats)-1]
 		}
 		return
 	}
@@ -181,11 +127,7 @@ func (heart *Heartbeat) beat(t time.Time) {
 
 		if ok && fTime.After(prevDataPoint.Time) {
 			// New Follow
-			err := heart.PostAlert(Alert{AlertFollow, f.User.Name, 0})
-			if err != nil {
-				log.Printf("Double Follow Error: %s %s %s\n %s",
-					prevDataPoint.Time, fTime, f.CreatedAtString, err)
-			}
+			heart.client.Alerts.Post(f.User.Name, AlertFollow, 0)
 			adjustedTotal--
 		} else {
 			// Avoid 99% of the work
@@ -221,13 +163,8 @@ func (heart *Heartbeat) beat(t time.Time) {
 				}
 			}
 		} else {
-			err := heart.PostAlert(Alert{
-				Name:   AlertHost,
-				Source: IrcNick(h.HostLogin),
-				Extra:  0})
-			if err != nil {
-				log.Printf("ERROR - Host Doubled: %s", err)
-			}
+			heart.client.Alerts.Post(IrcNick(h.HostLogin), AlertHost, 0)
+
 			newHostNames = append(newHostNames, h.HostLogin)
 		}
 	}
@@ -238,19 +175,12 @@ func (heart *Heartbeat) beat(t time.Time) {
 
 	// Update Data Points
 	prevDataPoint = &hbd
-	if len(heart.Beats) < heartBeatLimit {
-		heart.Beats = append(heart.Beats, hbd)
+	heart.heartLock.Lock()
+	if len(heart.beats) < heartBeatLimit {
+		heart.beats = append(heart.beats, hbd)
 	} else {
-		heart.Beats = append(heart.Beats[1:], hbd)
+		heart.beats = append(heart.beats[1:], hbd)
 	}
 
-	err = heart.PostAlert(Alert{
-		Name:   AlertNone,
-		Source: heart.client.RoomName,
-		Extra:  len(heart.Beats) - 1,
-	})
-
-	if err != nil {
-		log.Printf("ERROR - Heartbeat alert failed: %s", err)
-	}
+	heart.client.Alerts.Post(heart.client.RoomName, AlertNone, len(heart.beats)-1)
 }

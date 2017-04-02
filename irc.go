@@ -164,7 +164,8 @@ func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
 		return fmt.Errorf("Weak Client Ref Missing")
 	}
 
-	return c.weakClientRef.Heart.PostAlert(Alert{aType, src, extra})
+	c.weakClientRef.Alerts.Post(src, aType, extra)
+	return nil
 }
 
 func (c *Chat) hostUpdate(src IrcNick, target IrcNick, numViewers int) error {
