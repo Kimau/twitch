@@ -22,8 +22,7 @@ const (
 // needs to bind to real address for VPN
 var (
 	IrcVerboseMode = false
-
-	regexHostMatch = regexp.MustCompile("([[:word:]]+|-) ([0-9]+)")
+	regexHostMatch = regexp.MustCompile("([[:word:]]+) ([0-9]+|-)")
 
 	ignoreMsgCmd = map[string]bool{
 		IrcReplyYourhost: false,
@@ -440,16 +439,19 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		channelDoingTheHost := m.Params[0]
 		subs := regexHostMatch.FindStringSubmatch(m.Trailing())
 		if len(subs) != 3 {
-			log.Printf("HOST ERROR - Parsing [%s]\n%s", subs, m)
+			log.Printf("HOST ERROR 1 - Parsing [%s]\n%s", subs, m)
 			return
 		}
 
-		viewers, err := strconv.Atoi(subs[2])
-		if err != nil {
-			log.Printf("HOST ERROR - Parsing [%s]\n%s", subs[2], m)
+		viewerNum := 0
+		if subs[2] != "-" {
+			var err error
+			viewerNum, err = strconv.Atoi(subs[2])
+			if err != nil {
+				log.Printf("HOST ERROR 2 - Parsing [%s]\n%s", subs[2], m)
+			}
 		}
-
-		c.hostUpdate(IrcNick(channelDoingTheHost), IrcNick(subs[1]), viewers)
+		c.hostUpdate(IrcNick(channelDoingTheHost), IrcNick(subs[1]), viewerNum)
 
 	case TwitchCmdReconnect:
 		printDebugTag(m)
