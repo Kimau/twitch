@@ -88,11 +88,10 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string,
 	return chat, nil
 }
 
-func (c *Chat) tickRoomActive(activeInRoomTicker *time.Ticker) {
-	for _ = range activeInRoomTicker.C {
-		for _, v := range c.InRoom {
-			v.Chatter.updateActive()
-		}
+func (c *Chat) tickRoomActive() {
+	log.Println("Tick room Active")
+	for _, v := range c.InRoom {
+		v.Chatter.updateActive()
 	}
 }
 
@@ -104,9 +103,6 @@ func (c *Chat) StartRunLoop() error {
 	}
 
 	c.irc = irc.NewClient(conn, c.config)
-
-	activeInRoomTicker := time.NewTicker(time.Minute * 5)
-	go c.tickRoomActive(activeInRoomTicker)
 
 	if IrcVerboseMode {
 		// In Verbose mode log all messages
@@ -133,7 +129,6 @@ func (c *Chat) StartRunLoop() error {
 		c.irc = nil
 	}
 
-	activeInRoomTicker.Stop()
 	return err
 }
 
@@ -636,6 +631,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 	case IrcCmdPing:
+		c.tickRoomActive()
 
 	default:
 		log.Printf("IRC ???[%s] \t %+v", m.Command, m)

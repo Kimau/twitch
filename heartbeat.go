@@ -74,17 +74,19 @@ func (heart *Heartbeat) GetBeat(beatNum int) HeartbeatData {
 }
 
 // GetAllBeats - Get All the Beats
-func (heart *Heartbeat) GetAllBeats() (res []HeartbeatData) {
+func (heart *Heartbeat) GetAllBeats() []HeartbeatData {
 	heart.heartLock.RLock()
 	defer heart.heartLock.RUnlock()
 
-	copy(res, heart.beats)
-	return res
+	log.Printf("Beats Source %d", len(heart.beats))
+	return heart.beats[0:]
 }
 
 func (heart *Heartbeat) beat(t time.Time) {
 	heart.heartLock.Lock()
 	defer heart.heartLock.Unlock()
+
+	fmt.Println("-- BEAT --")
 
 	var prevDataPoint *HeartbeatData
 	if len(heart.beats) > 0 {
@@ -175,7 +177,6 @@ func (heart *Heartbeat) beat(t time.Time) {
 
 	// Update Data Points
 	prevDataPoint = &hbd
-	heart.heartLock.Lock()
 	if len(heart.beats) < heartBeatLimit {
 		heart.beats = append(heart.beats, hbd)
 	} else {
