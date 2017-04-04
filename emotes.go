@@ -60,7 +60,11 @@ func (a EmoteReplaceListFromBack) String() string {
 // Replace - Replace the string with emotes
 func (a EmoteReplaceListFromBack) Replace(source string) string {
 	for _, erl := range a {
-		source = source[:erl.Start] + fmt.Sprintf(`<img src="%s">`, erl.ID.EmoteURL(false)) + source[erl.End+1:]
+		source = fmt.Sprintf(`%s<img src="%s" alt="%s">%s`,
+			source[:erl.Start],
+			erl.ID.EmoteURL(false),
+			source[erl.Start:erl.End+1],
+			source[erl.End+1:])
 	}
 
 	return source
