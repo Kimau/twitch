@@ -32,7 +32,7 @@ func generateDummyUser() User {
 		UserType: TwitchTypeMod,
 
 		CreatedAtString: "2013-06-03T19:12:02Z",
-		UpdatedAtStr:    "2016-12-14T01:01:44Z",
+		UpdatedAtString: "2016-12-14T01:01:44Z",
 	}
 }
 
@@ -66,7 +66,7 @@ func TestUserFull(t *testing.T) {
 			Logo:            "https://static-cdn.jtvnw.net/jtv_user_pictures/dallas-profile_image-1a2c906ee2c35f12-300x300.png",
 			UserType:        "staff",
 			CreatedAtString: "2013-06-03T19:12:02Z",
-			UpdatedAtStr:    "2016-12-14T01:01:44Z",
+			UpdatedAtString: "2016-12-14T01:01:44Z",
 		},
 
 		UserPersonal: &UserPersonal{
@@ -124,9 +124,9 @@ func TestUserFull(t *testing.T) {
 		t.Logf("CreatedAtString [%s:%s] not equal", testUser.CreatedAtString, user.CreatedAtString)
 	}
 
-	if testUser.UpdatedAtStr != user.UpdatedAtStr {
+	if testUser.UpdatedAtString != user.UpdatedAtString {
 		t.Fail()
-		t.Logf("UpdatedAtStr [%s:%s] not equal", testUser.UpdatedAtStr, user.UpdatedAtStr)
+		t.Logf("UpdatedAtString [%s:%s] not equal", testUser.UpdatedAtString, user.UpdatedAtString)
 	}
 	if testUser.Email != user.Email {
 		t.Fail()

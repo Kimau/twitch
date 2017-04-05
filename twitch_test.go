@@ -15,6 +15,16 @@ func (dvp *DummyViewProvider) GetAuthViewer() *Viewer {
 	return v
 }
 
+func (dvp *DummyViewProvider) GetAllViewerIDs() []ID {
+	myKeys := make([]ID, len(dvp.Viewers))
+	i := 0
+	for k := range dvp.Viewers {
+		myKeys[i] = k
+		i++
+	}
+	return myKeys
+}
+
 func (dvp *DummyViewProvider) GetRoom() *Viewer {
 	v := dvp.GetViewer(ID(0))
 	v.User.Name = "kimau"

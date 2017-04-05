@@ -1,7 +1,10 @@
 package twitch
 
-import "math/rand"
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+	"time"
+)
 
 // GetRandomFollowers - Returns Random Follow for Channel
 func (ah *Client) GetRandomFollowers(numFollowers int) []*Viewer {
@@ -38,4 +41,24 @@ func (ah *Client) GetRandomFollowers(numFollowers int) []*Viewer {
 	}
 
 	return vRes
+}
+
+// MostUpToDateViewer - Get Viewer based on User recent update useful for judging how stale data is
+func (ah *Client) MostUpToDateViewer(numFollowers int) (*Viewer, time.Time) {
+	var mostRecentViewer *Viewer
+	oldTime := time.Unix(0, 0)
+
+	for _, v := range ah.Viewers {
+		if v.User == nil {
+			continue
+		}
+
+		updatedTime := v.User.UpdatedAt()
+		if updatedTime.After(oldTime) {
+			oldTime = updatedTime
+			mostRecentViewer = v
+		}
+	}
+
+	return mostRecentViewer, oldTime
 }

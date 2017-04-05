@@ -30,6 +30,17 @@ func (hvd *HistoricViewerData) GetRoom() *Viewer {
 	return nil
 }
 
+// GetAllViewerIDs - Get All Viewer IDs slower than a direct range over
+func (hvd *HistoricViewerData) GetAllViewerIDs() []ID {
+	myKeys := make([]ID, len(hvd.ViewerData))
+	i := 0
+	for k := range hvd.ViewerData {
+		myKeys[i] = k
+		i++
+	}
+	return myKeys
+}
+
 // GetViewer - Get Viewer by ID
 func (hvd *HistoricViewerData) GetViewer(id ID) *Viewer {
 	v, ok := hvd.ViewerData[id]

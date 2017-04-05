@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 )
 
 type viewerProvider interface {
 	GetAuthViewer() *Viewer
 	GetRoom() *Viewer
+
+	GetAllViewerIDs() []ID
 
 	GetViewer(ID) *Viewer
 	GetViewerFromChatter(Chatter) *Viewer
@@ -30,6 +31,17 @@ func (ah *Client) GetAuthViewer() *Viewer {
 // GetRoom - Returns the account we are watching
 func (ah *Client) GetRoom() *Viewer {
 	return ah.Viewers[ah.RoomID]
+}
+
+// GetAllViewerIDs - Get All Viewer IDs slower than a direct range over
+func (ah *Client) GetAllViewerIDs() []ID {
+	myKeys := make([]ID, len(ah.Viewers))
+	i := 0
+	for k := range ah.Viewers {
+		myKeys[i] = k
+		i++
+	}
+	return myKeys
 }
 
 // GetViewer - Get Viewer by ID
@@ -167,12 +179,7 @@ func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
 func (ah *Client) updateFollowerCache(f ChannelFollow) error {
 	v := ah.GetViewerFromUser(*f.User)
 	v.Follower = &f
-
-	fTime, err := time.Parse(time.RFC3339, f.CreatedAtString)
-	if err != nil {
-		return err
-	}
-	ah.FollowerCache[v.TwitchID] = fTime
+	ah.FollowerCache[v.TwitchID] = ChannelRelationship(f).CreatedAt()
 
 	return nil
 }

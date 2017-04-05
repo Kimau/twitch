@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
 /*  v5 User Calls
@@ -31,7 +32,7 @@ type User struct {
 	UserType string `json:"type,omitempty"` // staff
 
 	CreatedAtString string `json:"created_at"` // 2013-06-03T19:12:02Z
-	UpdatedAtStr    string `json:"updated_at"` // 2016-12-14T01:01:44Z
+	UpdatedAtString string `json:"updated_at"` // 2016-12-14T01:01:44Z
 }
 
 // UserNotification - What Notifications the user has turned on - only for you
@@ -60,6 +61,10 @@ type UsersMethod struct {
 	client *Client
 	au     *UserAuth
 }
+
+/******************************************************************************
+			User Method
+******************************************************************************/
 
 // GetMe - Get OAuth User Details
 func (u *UsersMethod) GetMe() (*UserFull, error) {
@@ -237,3 +242,27 @@ func (u *UsersMethod) Block(id string) error {}
 // Unblock - Unblock User
 func (u *UsersMethod) Unblock(id string) error {}
 */
+
+/******************************************************************************
+			User
+******************************************************************************/
+
+// CreatedAt - Parses the internal String
+func (usr User) CreatedAt() time.Time {
+	t, err := time.Parse(time.RFC822Z, usr.CreatedAtString)
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}
+
+// UpdatedAt - Parses the internal String
+func (usr User) UpdatedAt() time.Time {
+	t, err := time.Parse(time.RFC822Z, usr.UpdatedAtString)
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}

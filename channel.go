@@ -1,6 +1,9 @@
 package twitch
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 const (
 	// SoftCapOnFollowGrab - Implicit Soft Cap on Follower requests can be overridden by specificy a limit but in the case of a -1 it will be set to this
@@ -46,7 +49,7 @@ type Channel struct {
 	Logo string `json:"logo,omitempty"` // "https://static-cdn.jtvnw.net/jtv_user_pictures/dallas-profile_image-1a2c906ee2c35f12-300x300.png",
 
 	CreatedAtString string `json:"created_at"` // 2013-06-03T19:12:02Z
-	UpdatedAtStr    string `json:"updated_at"` // 2016-12-14T01:01:44Z
+	UpdatedAtString string `json:"updated_at"` // 2016-12-14T01:01:44Z
 }
 
 // ChannelFull - Full Channel details can only get self
@@ -253,3 +256,41 @@ func (c *ChannelsMethod) GetSubscribers(id string, limit int, newestFirst bool) 
 // func (c *ChannelsMethod) GetCommunity(id string) (*Channel , error)        {}
 // func (c *ChannelsMethod) SetCommunity(id string) (*Channel , error)        {}
 // func (c *ChannelsMethod) DeleteFromCommunity(id string) (*Channel , error) {}
+
+/******************************************************************************
+			Channel
+******************************************************************************/
+
+// CreatedAt - Parses the internal String
+func (c Channel) CreatedAt() time.Time {
+	t, err := time.Parse(time.RFC822Z, c.CreatedAtString)
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}
+
+// UpdatedAt - Parses the internal String
+func (c Channel) UpdatedAt() time.Time {
+	t, err := time.Parse(time.RFC822Z, c.UpdatedAtString)
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}
+
+/******************************************************************************
+			Channel Relationship
+******************************************************************************/
+
+// CreatedAt - Parses the internal String
+func (cr ChannelRelationship) CreatedAt() time.Time {
+	t, err := time.Parse(time.RFC822Z, cr.CreatedAtString)
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}

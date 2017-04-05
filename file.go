@@ -125,8 +125,8 @@ func localIrcMsgStore() *os.File {
 	return localIrcMsgStoreFile
 }
 
-// DumpState - Dump the Internal State to File
-func (ah *Client) DumpState() error {
+// DumpViewers - Dump the Internal State to File
+func (ah *Client) DumpViewers() error {
 	f, err := os.Create(fmt.Sprintf(dumpFilePattern, ah.RoomName, time.Now().Unix()))
 	if err != nil {
 		return err
@@ -146,8 +146,8 @@ func (ah *Client) DumpState() error {
 	return nil
 }
 
-// GetDumpListing - Listing of All Fumps in this folder
-func GetDumpListing(chanName string) [][]string {
+// GetViewerDumpListing - Listing of All Fumps in this folder
+func GetViewerDumpListing(chanName IrcNick) [][]string {
 	sList := [][]string{}
 
 	files, err := ioutil.ReadDir("./data/")
@@ -161,7 +161,7 @@ func GetDumpListing(chanName string) [][]string {
 	for _, file := range files {
 		res := regexDumpFileMatch.FindStringSubmatch(file.Name())
 		if len(res) == 3 {
-			if ignoreNameMatch || chanName == res[1] {
+			if ignoreNameMatch || chanName == IrcNick(res[1]) {
 				sList = append(sList, res)
 			}
 		}
@@ -190,8 +190,34 @@ func GetChatLogListing() []string {
 	return sList
 }
 
-// LoadDumpForAnalysis - Load Viewer Dump for Analysis
-func LoadDumpForAnalysis(filename string) (*HistoricViewerData, error) {
+// LoadMostRecentViewerDump - Load the most recent User Data for User
+func LoadMostRecentViewerDump(chanName IrcNick) (*HistoricViewerData, error) {
+	listings := GetViewerDumpListing(chanName)
+	bigNum := 0
+
+	// Get Highest Num
+	for _, item := range listings {
+		v, err := strconv.Atoi(item[2])
+		if err != nil {
+			log.Printf("Cannot Convert: %s", err)
+			continue
+		}
+
+		if v > bigNum {
+			bigNum = v
+		}
+	}
+
+	if bigNum == 0 {
+		return nil, fmt.Errorf("Unable to find any listings")
+	}
+
+	fileName := fmt.Sprintf(dumpFilePattern, chanName, bigNum)
+	return LoadViewerDumpForAnalysis(fileName)
+}
+
+// LoadViewerDumpForAnalysis - Load Viewer Dump for Analysis
+func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 	var hvd HistoricViewerData
 
 	res := regexDumpFileMatch.FindStringSubmatch(filename)

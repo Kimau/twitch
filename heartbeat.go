@@ -57,7 +57,7 @@ func (heart *Heartbeat) StartBeat() {
 		timeSinceDump += heartBeatRate
 		if timeSinceDump > heartDumpEvery {
 			timeSinceDump = 0
-			err := heart.client.DumpState()
+			err := heart.client.DumpViewers()
 			if err != nil {
 				fmt.Printf("DUMP ERROR: %s", err)
 			}

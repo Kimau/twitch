@@ -15,7 +15,7 @@ const (
 type authToken struct {
 	AuthToken struct {
 		CreatedAtString string   `json:"created_at"` // 2013-06-03T19:12:02Z
-		UpdatedAtStr    string   `json:"updated_at"` // 2016-12-14T01:01:44Z
+		UpdatedAtString string   `json:"updated_at"` // 2016-12-14T01:01:44Z
 		ScopeList       []string `json:"scopes"`
 	} `json:"authorization"`
 	ClientID string  `json:"client_id"` // "uo6dggojyb8d6soh92zknwmi5ej1q2"

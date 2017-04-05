@@ -74,7 +74,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(w, body)
 
 	case debugOptions && strings.HasPrefix(relPath, "savedump"):
-		if err := ah.DumpState(); err != nil {
+		if err := ah.DumpViewers(); err != nil {
 			fmt.Fprintf(w, "Failed to Dump: %s", err)
 		} else {
 			fmt.Fprintf(w, "Dumped data to file")
