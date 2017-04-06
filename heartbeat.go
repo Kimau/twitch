@@ -116,15 +116,11 @@ func (heart *Heartbeat) beat(t time.Time) {
 	// Get Channel Followers
 	// If there are more then 30 follows in a SECOND who cares
 	fList, num, err := heart.client.Channel.GetFollowers(heart.client.RoomID, 30, true)
+	heart.client.updateFollowerCache(fList)
 
 	// Check for new followers
 	adjustedTotal := num
 	for _, f := range fList {
-		err := heart.client.updateFollowerCache(f)
-		if err != nil {
-			log.Printf("ERROR - Updating Follow Cache: %s\n%s", f.CreatedAtString, err)
-		}
-
 		fTime, ok := heart.client.FollowerCache[f.User.ID]
 
 		if ok && fTime.After(prevDataPoint.Time) {

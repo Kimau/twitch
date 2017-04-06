@@ -22,7 +22,7 @@ func (ah *Client) GetRandomFollowers(numFollowers int) []*Viewer {
 	for i := range ah.FollowerCache {
 		for _, x := range listOfOffset {
 			if x == offset {
-				vRes[c] = ah.Viewers[i]
+				vRes[c] = ah.viewers[i]
 				c++
 				break
 			}
@@ -48,7 +48,7 @@ func (ah *Client) MostUpToDateViewer(numFollowers int) (*Viewer, time.Time) {
 	var mostRecentViewer *Viewer
 	oldTime := time.Unix(0, 0)
 
-	for _, v := range ah.Viewers {
+	for _, v := range ah.viewers {
 		if v.User == nil {
 			continue
 		}

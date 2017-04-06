@@ -10,16 +10,16 @@ import (
 
 // AdminHTTP for backoffice requests
 func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
-	// Get Relative Path
-
-	relPath := req.URL.Path[strings.Index(req.URL.Path, ah.servePath)+len(ah.servePath):]
-	log.Println("Twitch ADMIN: ", relPath)
 
 	// Force Auth
 	if ah.AdminAuth.Token == nil {
 		ah.handleOAuthAdminStart(w, req)
 		return
 	}
+
+	// Get Relative Path
+	relPath := req.URL.Path[strings.Index(req.URL.Path, ah.servePath)+len(ah.servePath):]
+	log.Println("Twitch ADMIN: ", relPath)
 
 	switch {
 	case strings.HasPrefix(relPath, "utest"):
@@ -45,7 +45,7 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(w, "%#v", uf)
 
 	case strings.HasPrefix(relPath, "updateFollowers"):
-		numFollowers, err := ah.UpdateFollowers()
+		numFollowers, err := ah.ForceUpdateFollowers()
 		if err != nil {
 			fmt.Fprintf(w, "Followers: %d \n %s", numFollowers, err.Error())
 		} else {

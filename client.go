@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -85,7 +86,8 @@ type Client struct {
 	RoomID     ID
 	RoomStream *StreamBody
 
-	Viewers       map[ID]*Viewer
+	viewLock      sync.Mutex
+	viewers       map[ID]*Viewer
 	FollowerCache map[ID]time.Time
 	PendingLogins map[authInternalState]time.Time
 
@@ -109,7 +111,7 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 		httpClient:   &http.Client{},
 		AdminChannel: make(chan int, 3),
 
-		Viewers:       make(map[ID]*Viewer),
+		viewers:       make(map[ID]*Viewer),
 		FollowerCache: make(map[ID]time.Time),
 		PendingLogins: make(map[authInternalState]time.Time),
 	}
@@ -234,8 +236,14 @@ func (ah *Client) adminHasAuthed() {
 	}
 	ah.RoomID = roomViewer.TwitchID
 
-	//
-	ah.UpdateFollowers()
+	// Get All Followers slowly
+	// for a big channel with a million follows this will take 3 hours
+	go func() {
+		followChan := ah.Channel.GetAllFollowersSlow(ah.RoomID, time.Second, true)
+		for fList, ok := <-followChan; ok; fList, ok = <-followChan {
+			ah.updateFollowerCache(fList)
+		}
+	}()
 
 	// Start up IRC Chat
 	if ah.AdminAuth.Scopes[scopeChatLogin] {

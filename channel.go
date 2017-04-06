@@ -134,68 +134,129 @@ func (c *ChannelsMethod) GetEditors(id ID) ([]User, error) {
 
 // GetFollowers - Returns the Followers for a Channel
 func (c *ChannelsMethod) GetFollowers(id ID, limit int, newestFirst bool) ([]ChannelFollow, int, error) {
-	return c.GetFollowersWithOffset(id, limit, 0, newestFirst)
-}
 
-// GetFollowersWithOffset - Returns the Followers for a Channel starting at offset
-func (c *ChannelsMethod) GetFollowersWithOffset(id ID, limit int, offset int, newestFirst bool) ([]ChannelFollow, int, error) {
+	// Can be overridden by passing explicit limit
+	if limit < 0 {
+		limit = SoftCapOnFollowGrab
+	}
 
+	// Page Limit
 	reqPageLimit := limit
 	if limit < 0 {
-		reqPageLimit = 100
-	} else if reqPageLimit > pageLimit {
-		// Only support up to pageLimit
+		reqPageLimit = pageLimit
+	} else if reqPageLimit > pageLimit { // Only support up to pageLimit
 		reqPageLimit = pageLimit
 	}
 
+	compiledList := []ChannelFollow{}
+	cursor := ""
+	followersTotal := 0
+
+RequestLoop:
+	for len(compiledList) < limit {
+		followList, err := c.getFollowersWithCursor(id, reqPageLimit, newestFirst, cursor)
+		if err != nil {
+			return compiledList, followersTotal, err
+		}
+
+		cursor = followList.Cursor
+		followersTotal = followList.Total
+		compiledList = append(compiledList, followList.Follows...)
+
+		// Do we have all followers
+		if len(compiledList) >= followersTotal {
+			break RequestLoop
+		}
+	}
+
+	return compiledList, followersTotal, nil
+}
+
+// GetAllFollowersSlow - Returns a Channel which Squirts followers
+func (c *ChannelsMethod) GetAllFollowersSlow(id ID, delay time.Duration, newestFirst bool) chan []ChannelFollow {
+
+	chanToSquirtFollowersOut := make(chan []ChannelFollow, 10)
+
+	squirtTicker := time.NewTicker(delay)
+	go func() {
+		cursor := ""
+		for _ = range squirtTicker.C {
+			followList, err := c.getFollowersWithCursor(id, pageLimit, newestFirst, cursor)
+			if err != nil {
+				close(chanToSquirtFollowersOut)
+				return
+			}
+
+			cursor = followList.Cursor
+			chanToSquirtFollowersOut <- followList.Follows
+		}
+	}()
+
+	return chanToSquirtFollowersOut
+}
+
+type followResponse struct {
+	Total   int             `json:"_total,omitempty"`
+	Cursor  string          `json:"_cursor,omitempty"`
+	Follows []ChannelFollow `json:"follows"`
+}
+
+// getFollowersWithCursor - Let's client space out requests for doing things like renewing all followers
+func (c *ChannelsMethod) getFollowersWithCursor(id ID, limit int, newestFirst bool, cursor string) (followResponse, error) {
+	followList := followResponse{
+		Cursor: cursor,
+	}
+
+	// Check Limit Range
+	if limit < 0 {
+		limit = pageLimit
+	} else if limit > pageLimit {
+		limit = pageLimit
+	}
+
+	// Request Order
 	reqOrder := "asc"
 	if newestFirst {
 		reqOrder = "desc"
 	}
 
-	followList := struct {
-		Total   int             `json:"_total,omitempty"`
-		Cursor  string          `json:"_cursor,omitempty"`
-		Follows []ChannelFollow `json:"follows"`
-	}{}
-
-	compiledList := []ChannelFollow{}
-	for limit < 0 || offset < limit {
-
-		reqURL := fmt.Sprintf("channels/%s/follows?limit=%d&offset=%d&direction=%s",
-			id, reqPageLimit, offset, reqOrder)
-		if len(followList.Cursor) > 0 {
-			reqURL = fmt.Sprintf("channels/%s/follows?limit=%d&cursor=%s",
-				id, reqPageLimit, followList.Cursor)
-		}
-
-		// Can be overridden by passing explicit limit
-		if limit < 0 && followList.Total > SoftCapOnFollowGrab {
-			limit = SoftCapOnFollowGrab
-		}
-
-		_, err := c.client.Get(c.au, reqURL, &followList)
-
-		if err != nil {
-			fmt.Printf("ID:%s \n    limit: %d \n  offset:%d \n  err: %s", id, limit, offset, err)
-
-			return compiledList, followList.Total, err
-		}
-
-		if limit < 0 {
-			limit = followList.Total
-		}
-
-		compiledList = append(compiledList, followList.Follows...)
-
-		if len(followList.Follows) < reqPageLimit {
-			return compiledList, followList.Total, nil
-		}
-
-		offset += reqPageLimit
+	// Actual Request
+	reqURL := fmt.Sprintf("channels/%s/follows?limit=%d&direction=%s",
+		id, limit, reqOrder)
+	if len(followList.Cursor) > 0 {
+		reqURL += fmt.Sprintf("&cursor=%s", followList.Cursor)
 	}
 
-	return compiledList, followList.Total, nil
+	_, err := c.client.Get(c.au, reqURL, &followList)
+	return followList, err
+}
+
+// getFollowersWithOffset - Let's client space out requests for doing things like renewing all followers
+func (c *ChannelsMethod) getFollowersWithOffset(id ID, limit int, newestFirst bool, offset int) (followResponse, error) {
+	followList := followResponse{}
+
+	// Check Limit Range
+	if limit < 0 {
+		limit = pageLimit
+	} else if limit > pageLimit {
+		limit = pageLimit
+	}
+
+	// Request Order
+	reqOrder := "asc"
+	if newestFirst {
+		reqOrder = "desc"
+	}
+
+	// Actual Request
+	reqURL := fmt.Sprintf("channels/%s/follows?limit=%d&direction=%s",
+		id, limit, reqOrder)
+	if offset > 0 {
+		reqURL += fmt.Sprintf("&offset=%d", offset)
+	}
+
+	_, err := c.client.Get(c.au, reqURL, &followList)
+	return followList, err
 }
 
 // GetSubscribers - Get all subs to channel id
@@ -263,7 +324,7 @@ func (c *ChannelsMethod) GetSubscribers(id string, limit int, newestFirst bool) 
 
 // CreatedAt - Parses the internal String
 func (c Channel) CreatedAt() time.Time {
-	t, err := time.Parse(time.RFC822Z, c.CreatedAtString)
+	t, err := time.Parse(time.RFC3339, c.CreatedAtString)
 	if err != nil {
 		panic(err)
 	}
@@ -273,7 +334,7 @@ func (c Channel) CreatedAt() time.Time {
 
 // UpdatedAt - Parses the internal String
 func (c Channel) UpdatedAt() time.Time {
-	t, err := time.Parse(time.RFC822Z, c.UpdatedAtString)
+	t, err := time.Parse(time.RFC3339, c.UpdatedAtString)
 	if err != nil {
 		panic(err)
 	}
@@ -287,7 +348,7 @@ func (c Channel) UpdatedAt() time.Time {
 
 // CreatedAt - Parses the internal String
 func (cr ChannelRelationship) CreatedAt() time.Time {
-	t, err := time.Parse(time.RFC822Z, cr.CreatedAtString)
+	t, err := time.Parse(time.RFC3339, cr.CreatedAtString)
 	if err != nil {
 		panic(err)
 	}

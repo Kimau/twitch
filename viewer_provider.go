@@ -23,21 +23,21 @@ type viewerProvider interface {
 // GetAuthViewer - Returns the account running the bot
 func (ah *Client) GetAuthViewer() *Viewer {
 	if ah.AdminAuth != nil && ah.AdminAuth.Token != nil {
-		return ah.Viewers[ah.AdminAuth.Token.UserID]
+		return ah.viewers[ah.AdminAuth.Token.UserID]
 	}
 	return nil
 }
 
 // GetRoom - Returns the account we are watching
 func (ah *Client) GetRoom() *Viewer {
-	return ah.Viewers[ah.RoomID]
+	return ah.viewers[ah.RoomID]
 }
 
 // GetAllViewerIDs - Get All Viewer IDs slower than a direct range over
 func (ah *Client) GetAllViewerIDs() []ID {
-	myKeys := make([]ID, len(ah.Viewers))
+	myKeys := make([]ID, len(ah.viewers))
 	i := 0
-	for k := range ah.Viewers {
+	for k := range ah.viewers {
 		myKeys[i] = k
 		i++
 	}
@@ -46,7 +46,7 @@ func (ah *Client) GetAllViewerIDs() []ID {
 
 // GetViewer - Get Viewer by ID
 func (ah *Client) GetViewer(twitchID ID) *Viewer {
-	v, ok := ah.Viewers[twitchID]
+	v, ok := ah.viewers[twitchID]
 	if ok {
 		return v
 	}
@@ -66,7 +66,10 @@ func (ah *Client) GetViewer(twitchID ID) *Viewer {
 
 // GetViewerFromUser - Get Viewer from User
 func (ah *Client) GetViewerFromUser(usr User) *Viewer {
-	v, ok := ah.Viewers[usr.ID]
+	ah.viewLock.Lock()
+	defer ah.viewLock.Unlock()
+
+	v, ok := ah.viewers[usr.ID]
 
 	if ok {
 		v.User = &usr
@@ -77,7 +80,7 @@ func (ah *Client) GetViewerFromUser(usr User) *Viewer {
 			User:     &usr,
 		}
 
-		ah.Viewers[usr.ID] = v
+		ah.viewers[usr.ID] = v
 	}
 
 	return v
@@ -113,7 +116,7 @@ func (ah *Client) GetViewerFromChatter(cu Chatter) *Viewer {
 
 func (ah *Client) findViewerByName(nick IrcNick) *Viewer {
 	nick = IrcNick(strings.ToLower(string(nick)))
-	for _, v := range ah.Viewers {
+	for _, v := range ah.viewers {
 		if v.User.Name == nick {
 			return v
 		}
@@ -176,21 +179,23 @@ func (ah *Client) UpdateViewers(nickList []IrcNick) []*Viewer {
 	return vList
 }
 
-func (ah *Client) updateFollowerCache(f ChannelFollow) error {
-	v := ah.GetViewerFromUser(*f.User)
-	v.Follower = &f
-	ah.FollowerCache[v.TwitchID] = ChannelRelationship(f).CreatedAt()
-
-	return nil
+func (ah *Client) updateFollowerCache(fList []ChannelFollow) {
+	for _, f := range fList {
+		v := ah.GetViewerFromUser(*f.User)
+		v.Follower = &f
+		ah.FollowerCache[v.TwitchID] = ChannelRelationship(f).CreatedAt()
+	}
 }
 
-// UpdateFollowers - Update all the channels followers
-func (ah *Client) UpdateFollowers() (int, error) {
+// ForceUpdateFollowers - Update all the channels followers
+func (ah *Client) ForceUpdateFollowers() (int, error) {
+
+	log.Println("------ FORCE UPDATE FOLLOWERS ------")
 
 	// Cycle through all the Viewers
-	for _, v := range ah.Viewers {
+	for _, v := range ah.viewers {
 		if v.Follower != nil {
-			ah.updateFollowerCache(*v.Follower)
+			v.UpdateFollowStatus()
 		}
 	}
 
@@ -200,9 +205,7 @@ func (ah *Client) UpdateFollowers() (int, error) {
 	}
 
 	// Update Users and Follow Status
-	for _, f := range followers {
-		ah.updateFollowerCache(f)
-	}
+	ah.updateFollowerCache(followers)
 
 	return numFollowers, nil
 }

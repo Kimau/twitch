@@ -249,7 +249,7 @@ func (u *UsersMethod) Unblock(id string) error {}
 
 // CreatedAt - Parses the internal String
 func (usr User) CreatedAt() time.Time {
-	t, err := time.Parse(time.RFC822Z, usr.CreatedAtString)
+	t, err := time.Parse(time.RFC3339, usr.CreatedAtString)
 	if err != nil {
 		panic(err)
 	}
@@ -259,7 +259,7 @@ func (usr User) CreatedAt() time.Time {
 
 // UpdatedAt - Parses the internal String
 func (usr User) UpdatedAt() time.Time {
-	t, err := time.Parse(time.RFC822Z, usr.UpdatedAtString)
+	t, err := time.Parse(time.RFC3339, usr.UpdatedAtString)
 	if err != nil {
 		panic(err)
 	}

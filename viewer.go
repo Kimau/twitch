@@ -52,15 +52,16 @@ func (vw *Viewer) UpdateFollowStatus() (bool, error) {
 		return false, err
 	}
 
-	if vw.Follower != nil {
-		vw.client.updateFollowerCache(*cFollow)
-		return true, nil
-	}
-
-	_, ok := vw.client.FollowerCache[vw.TwitchID]
-	if ok {
+	// Lost Viewer
+	if vw.Follower != nil && cFollow == nil {
 		delete(vw.client.FollowerCache, vw.TwitchID)
 	}
 
-	return false, nil
+	vw.Follower = cFollow
+	if vw.Follower == nil {
+		return false, nil
+	}
+
+	vw.client.FollowerCache[vw.TwitchID] = ChannelRelationship(*vw.Follower).CreatedAt()
+	return true, nil
 }

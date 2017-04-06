@@ -133,7 +133,7 @@ func (ah *Client) DumpViewers() error {
 	}
 
 	enc := gob.NewEncoder(f)
-	for _, v := range ah.Viewers {
+	for _, v := range ah.viewers {
 		err = enc.Encode(v)
 		if err != nil {
 			f.Close()
