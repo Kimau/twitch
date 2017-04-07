@@ -68,7 +68,7 @@ func (hvd *HistoricViewerData) FindViewer(nick IrcNick) (*Viewer, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("Not captured")
+	return nil, fmt.Errorf("Not captured: " + string(nick))
 }
 
 // UpdateViewers - Get viewers from nicks no updating because historic

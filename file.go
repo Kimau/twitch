@@ -16,6 +16,7 @@ import (
 
 const (
 	dumpFilePattern = "./data/dump_%s_%d.bin"
+	chatFilePattern = "./data/%s_chat.log"
 )
 
 var (
@@ -38,8 +39,6 @@ func (ah *Client) loadSecrets() {
 
 	sd := tokenData{}
 	json.Unmarshal(fileData, &sd)
-
-	// fmt.Printf("ClientID: %s\n ClientSecret: %s\n IrcServerAddr: %s",sd.ClientID,sd.ClientSecret,sd.IrcServerAddr)
 
 	ah.tokenData = &sd
 }
@@ -141,7 +140,7 @@ func (ah *Client) DumpViewers() error {
 		}
 	}
 
-	fmt.Printf("Dumped data to file: %s", f.Name())
+	log.Printf("Dumped data to file: %s", f.Name())
 	f.Close()
 	return nil
 }
@@ -258,8 +257,10 @@ func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 }
 
 // LoadChatForAnalysis - Load Chat Log for Analysis
-func LoadChatForAnalysis(filename string) (*HistoricChatLog, error) {
+func LoadChatForAnalysis(room IrcNick) (*HistoricChatLog, error) {
 	var hc HistoricChatLog
+
+	filename := fmt.Sprintf(chatFilePattern, room)
 
 	res := regexChatLogFileMatch.FindStringSubmatch(filename)
 	if len(res) != 2 {
@@ -303,9 +304,7 @@ func LoadChatForAnalysis(filename string) (*HistoricChatLog, error) {
 		currDay = append(currDay, *llp)
 	}
 
-	if len(currDay) > 0 {
-		hc.LogLinesByDay[currT] = currDay
-	}
+	hc.LogLinesByDay[currT] = currDay
 
 	return &hc, nil
 }

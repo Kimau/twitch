@@ -118,6 +118,17 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 
 	kb.loadSecrets()
 
+	hvd, err := LoadMostRecentViewerDump(kb.RoomName)
+	if err == nil {
+		for k := range hvd.ViewerData {
+			newV := new(Viewer)
+			*newV = hvd.ViewerData[k]
+			kb.viewers[k] = newV
+		}
+	} else {
+		log.Printf("Unable to load old user data")
+	}
+
 	// Creat Admin Auth Temp
 	kb.AdminAuth = &UserAuth{
 		Token:        nil,

@@ -182,7 +182,7 @@ func (c *ChannelsMethod) GetAllFollowersSlow(id ID, delay time.Duration, newestF
 		cursor := ""
 		for _ = range squirtTicker.C {
 			followList, err := c.getFollowersWithCursor(id, pageLimit, newestFirst, cursor)
-			if err != nil {
+			if err != nil || cursor == followList.Cursor {
 				close(chanToSquirtFollowersOut)
 				return
 			}
