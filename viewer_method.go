@@ -84,18 +84,22 @@ func (vm *ViewerMethod) IsFollower(tid ID) (bool, time.Time) {
 
 // AllKeys - Get All Viewer IDs slower than a direct range over
 func (vm *ViewerMethod) AllKeys() []ID {
+	vm.m.Lock()
 	myKeys := make([]ID, len(vm.viewers))
 	i := 0
 	for k := range vm.viewers {
 		myKeys[i] = k
 		i++
 	}
+	vm.m.Unlock()
 	return myKeys
 }
 
 // Get - Get Viewer by ID
 func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
+	vm.m.Lock()
 	v, ok := vm.viewers[twitchID]
+	vm.m.Unlock()
 	if ok {
 		return &v
 	}
@@ -116,7 +120,9 @@ func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
 // GetFromUser - Get Viewer from User
 func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 
+	vm.m.Lock()
 	v, ok := vm.viewers[usr.ID]
+	vm.m.Unlock()
 
 	if ok {
 		v.SetUser(usr)
@@ -163,6 +169,9 @@ func (vm *ViewerMethod) GetFromChatter(cu Chatter) *Viewer {
 }
 
 func (vm *ViewerMethod) findViewerByName(nick IrcNick) *Viewer {
+	vm.m.Lock()
+	defer vm.m.Unlock()
+
 	nick = IrcNick(strings.ToLower(string(nick)))
 	for _, v := range vm.viewers {
 		if v.User.Name == nick {
