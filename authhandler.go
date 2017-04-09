@@ -145,8 +145,8 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 			http.Error(w, "Admin Auth has no token", 400)
 		}
 	} else {
-		v := ah.GetViewer(tID)
-		v.Auth = authU
+		v := ah.Viewers.Get(tID)
+		v.SetAuth(*authU)
 
 		http.SetCookie(w, v.Auth.createSessionCookie(ah.domain))
 		fmt.Fprintf(w, "Logged in %s #%s", v.GetNick(), tID)

@@ -11,6 +11,7 @@ var ()
 type HistoricViewerData struct {
 	Name       IrcNick
 	Timestamp  time.Time
+	RoomID     ID
 	ViewerData map[ID]Viewer
 }
 
@@ -20,18 +21,13 @@ type HistoricChatLog struct {
 	LogLinesByDay map[time.Time][]LogLineParsed
 }
 
-// GetAuthViewer - Returns Nothing because Historic Data
-func (hvd *HistoricViewerData) GetAuthViewer() *Viewer {
-	return nil
+// GetRoomID - Return Room ID
+func (hvd *HistoricViewerData) GetRoomID() ID {
+	return hvd.RoomID
 }
 
-// GetRoom - Returns nothing because Historic
-func (hvd *HistoricViewerData) GetRoom() *Viewer {
-	return nil
-}
-
-// GetAllViewerIDs - Get All Viewer IDs slower than a direct range over
-func (hvd *HistoricViewerData) GetAllViewerIDs() []ID {
+// AllKeys - Get All Viewer IDs slower than a direct range over
+func (hvd *HistoricViewerData) AllKeys() []ID {
 	myKeys := make([]ID, len(hvd.ViewerData))
 	i := 0
 	for k := range hvd.ViewerData {
@@ -41,8 +37,8 @@ func (hvd *HistoricViewerData) GetAllViewerIDs() []ID {
 	return myKeys
 }
 
-// GetViewer - Get Viewer by ID
-func (hvd *HistoricViewerData) GetViewer(id ID) *Viewer {
+// Get - Get Viewer by ID
+func (hvd *HistoricViewerData) Get(id ID) *Viewer {
 	v, ok := hvd.ViewerData[id]
 	if ok {
 		return &v
@@ -50,18 +46,18 @@ func (hvd *HistoricViewerData) GetViewer(id ID) *Viewer {
 	return nil
 }
 
-// GetViewerFromChatter  - Get Viewer from Chatter ID
-func (hvd *HistoricViewerData) GetViewerFromChatter(cu Chatter) *Viewer {
-	return hvd.GetViewer(cu.id)
+// GetFromChatter  - Get Viewer from Chatter ID
+func (hvd *HistoricViewerData) GetFromChatter(cu Chatter) *Viewer {
+	return hvd.Get(cu.id)
 }
 
-// GetViewerFromUser - Get Viewer from User ID (no update)
-func (hvd *HistoricViewerData) GetViewerFromUser(u User) *Viewer {
-	return hvd.GetViewer(u.ID)
+// GetFromUser - Get Viewer from User ID (no update)
+func (hvd *HistoricViewerData) GetFromUser(u User) *Viewer {
+	return hvd.Get(u.ID)
 }
 
-// FindViewer - Find viewer by Nick
-func (hvd *HistoricViewerData) FindViewer(nick IrcNick) (*Viewer, error) {
+// Find - Find viewer by Nick
+func (hvd *HistoricViewerData) Find(nick IrcNick) (*Viewer, error) {
 	for _, v := range hvd.ViewerData {
 		if v.GetNick() == nick {
 			return &v, nil

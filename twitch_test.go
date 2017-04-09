@@ -9,13 +9,7 @@ type DummyViewProvider struct {
 	Viewers map[ID]*Viewer
 }
 
-func (dvp *DummyViewProvider) GetAuthViewer() *Viewer {
-	v := dvp.GetViewer(ID(0))
-	v.User.Name = "kimau"
-	return v
-}
-
-func (dvp *DummyViewProvider) GetAllViewerIDs() []ID {
+func (dvp *DummyViewProvider) AllKeys() []ID {
 	myKeys := make([]ID, len(dvp.Viewers))
 	i := 0
 	for k := range dvp.Viewers {
@@ -25,14 +19,12 @@ func (dvp *DummyViewProvider) GetAllViewerIDs() []ID {
 	return myKeys
 }
 
-func (dvp *DummyViewProvider) GetRoom() *Viewer {
-	v := dvp.GetViewer(ID(0))
-	v.User.Name = "kimau"
-	return v
+func (dvp *DummyViewProvider) GetRoomID() ID {
+	return ID(0)
 }
 
 func (dvp *DummyViewProvider) GetNick() IrcNick { return "kimau" }
-func (dvp *DummyViewProvider) GetViewer(id ID) *Viewer {
+func (dvp *DummyViewProvider) Get(id ID) *Viewer {
 	v, ok := dvp.Viewers[id]
 	if !ok {
 		v = &Viewer{
@@ -47,7 +39,7 @@ func (dvp *DummyViewProvider) GetViewer(id ID) *Viewer {
 
 	return v
 }
-func (dvp *DummyViewProvider) FindViewer(nick IrcNick) (*Viewer, error) {
+func (dvp *DummyViewProvider) Find(nick IrcNick) (*Viewer, error) {
 	for _, v := range dvp.Viewers {
 		if v.User.Name == nick {
 			return v, nil
@@ -68,36 +60,36 @@ func (dvp *DummyViewProvider) FindViewer(nick IrcNick) (*Viewer, error) {
 func (dvp *DummyViewProvider) UpdateViewers(nickList []IrcNick) []*Viewer {
 	vList := []*Viewer{}
 	for _, name := range nickList {
-		v, _ := dvp.FindViewer(name)
+		v, _ := dvp.Find(name)
 		vList = append(vList, v)
 	}
 
 	return vList
 }
 
-func (dvp *DummyViewProvider) GetViewerFromUser(u User) *Viewer {
-	v := dvp.GetViewer(u.ID)
-	v.User = &u
+func (dvp *DummyViewProvider) GetFromUser(u User) *Viewer {
+	v := dvp.Get(u.ID)
+	v.SetUser(u)
 	return v
 }
 
-// GetViewerFromChatter - Get Viewer from Chatter
-func (dvp *DummyViewProvider) GetViewerFromChatter(cu Chatter) *Viewer {
+// GetFromChatter - Get Viewer from Chatter
+func (dvp *DummyViewProvider) GetFromChatter(cu Chatter) *Viewer {
 	if cu.id != "" {
-		v := dvp.GetViewer(cu.id)
-		v.Chatter = &cu
+		v := dvp.Get(cu.id)
+		v.SetChatter(cu)
 		return v
 	} else if cu.Nick != "" {
-		v, _ := dvp.FindViewer(cu.Nick)
-		v.Chatter = &cu
+		v, _ := dvp.Find(cu.Nick)
+		v.SetChatter(cu)
 		return v
 	} else if cu.DisplayName != "" {
-		v, _ := dvp.FindViewer(IrcNick(cu.DisplayName))
-		v.Chatter = &cu
+		v, _ := dvp.Find(IrcNick(cu.DisplayName))
+		v.SetChatter(cu)
 		return v
 	}
 
-	fmt.Printf("GetViewerFromChatter ERROR \n %s",
+	fmt.Printf("GetFromChatter ERROR \n %s",
 		strings.Replace(fmt.Sprintf("%#v", cu), ",", ",\n", -1))
 	return nil
 }

@@ -29,8 +29,8 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 			nickList[i-1] = IrcNick(nickRawList[i])
 		}
 
-		v := ah.UpdateViewers(nickList)
-		fmt.Fprintf(w, "%#v", v)
+		vList := ah.Viewers.UpdateViewers(nickList)
+		fmt.Fprintf(w, "%#v", vList)
 
 	case strings.HasPrefix(relPath, "chat"):
 		w.Header().Set("Content-Type", "text/plain")
@@ -43,14 +43,6 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		fmt.Fprintf(w, "%#v", uf)
-
-	case strings.HasPrefix(relPath, "updateFollowers"):
-		numFollowers, err := ah.ForceUpdateFollowers()
-		if err != nil {
-			fmt.Fprintf(w, "Followers: %d \n %s", numFollowers, err.Error())
-		} else {
-			fmt.Fprintf(w, "Followers: %d", numFollowers)
-		}
 
 	case strings.HasPrefix(relPath, "user"):
 		userName := regexp.MustCompile("username/([\\w]+)/*")

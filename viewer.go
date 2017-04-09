@@ -1,18 +1,49 @@
 package twitch
 
-import "log"
+import (
+	"log"
+	"sync"
+)
 
 // Viewer is basic Viewer
 type Viewer struct {
-	TwitchID ID       `json:"id"`
-	Coins    Currency `json:"coins"`
+	TwitchID ID `json:"id"`
 
-	User     *User          `json:"user"`
-	Auth     *UserAuth      `json:"auth"`
-	Chatter  *Chatter       `json:"chatter"`
-	Follower *ChannelFollow `json:"follow"`
+	User     *User          `json:"user"`    // Read Only - not enforced for perf reasons
+	Auth     *UserAuth      `json:"auth"`    // Read Only - not enforced for perf reasons
+	Chatter  *Chatter       `json:"chatter"` // Read Only - not enforced for perf reasons
+	Follower *ChannelFollow `json:"follow"`  // Read Only - not enforced for perf reasons
 
+	m      sync.Mutex
 	client *Client
+}
+
+//SetUser - Sets the new value in with lock
+func (vw *Viewer) SetUser(newVal User) {
+	vw.m.Lock()
+	vw.User = &newVal
+	vw.m.Unlock()
+}
+
+//SetAuth - Sets the new value in with lock
+func (vw *Viewer) SetAuth(newVal UserAuth) {
+	vw.m.Lock()
+	vw.Auth = &newVal
+	vw.m.Unlock()
+}
+
+//ClearAuth - Clear the Value with lock
+func (vw *Viewer) ClearAuth() {
+	vw.m.Lock()
+	vw.Auth = nil
+	vw.m.Unlock()
+}
+
+//SetChatter - Sets the new value in with lock
+func (vw *Viewer) SetChatter(newVal Chatter) {
+	vw.m.Lock()
+	vw.Chatter = &newVal
+	vw.m.Unlock()
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
@@ -43,25 +74,4 @@ func (vw *Viewer) UpdateUser() error {
 	}
 
 	return nil
-}
-
-// UpdateFollowStatus - Update Follower Status
-func (vw *Viewer) UpdateFollowStatus() (bool, error) {
-	cFollow, err := vw.client.User.IsFollowing(vw.TwitchID, vw.client.RoomID)
-	if err != nil {
-		return false, err
-	}
-
-	// Lost Viewer
-	if vw.Follower != nil && cFollow == nil {
-		delete(vw.client.FollowerCache, vw.TwitchID)
-	}
-
-	vw.Follower = cFollow
-	if vw.Follower == nil {
-		return false, nil
-	}
-
-	vw.client.FollowerCache[vw.TwitchID] = ChannelRelationship(*vw.Follower).CreatedAt()
-	return true, nil
 }

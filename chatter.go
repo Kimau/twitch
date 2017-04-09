@@ -29,7 +29,7 @@ type Chatter struct {
 	id ID // not cannonical data
 }
 
-func createChatter(nick IrcNick, m *irc.Message) *Chatter {
+func createChatter(nick IrcNick, m *irc.Message) Chatter {
 	if strings.Contains(string(nick), ".") {
 		// This is likely a system message
 		if m == nil {
@@ -43,7 +43,7 @@ func createChatter(nick IrcNick, m *irc.Message) *Chatter {
 		nick = IrcNick(newNick)
 	}
 
-	cu := &Chatter{
+	cu := Chatter{
 		Nick:        nick,
 		DisplayName: string(nick),
 		Bits:        0,

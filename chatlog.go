@@ -22,7 +22,7 @@ const (
 		<span class="nick">%s</span>
 		<span class="content">%s</span>
 		</div>`
-	ChatLogFormatMsgExtraHTML = `<div class="chatline %s" coins="%d" style="background:%s;">
+	ChatLogFormatMsgExtraHTML = `<div class="chatline %s" style="background:%s;">
 		<span class="time">%2d:%02d:%02d</span>
 		<span class="id">%s</span>
 		<span class="badge">%s</span>
@@ -318,7 +318,7 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	}
 
 	// Get Viewer Data
-	v := vp.GetViewer(llp.Msg.UserID)
+	v := vp.Get(llp.Msg.UserID)
 	if v == nil {
 		return fmt.Sprintf(ChatLogFormatMsgHTML,
 			catStr,
@@ -333,9 +333,14 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 		catStr += " follow"
 	}
 
+	chatColor := "#DDD"
+	if v.Chatter != nil {
+		chatColor = v.Chatter.Color
+	}
+
 	return fmt.Sprintf(ChatLogFormatMsgExtraHTML,
 		catStr,
-		v.Coins, v.Chatter.Color,
+		chatColor,
 		hour, minute, seconds,
 		llp.Msg.UserID,
 		badgeHTML,

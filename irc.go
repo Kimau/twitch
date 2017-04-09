@@ -63,6 +63,8 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string,
 		return nil, fmt.Errorf("Associated user has no valid Auth")
 	}
 
+	roomViewer := vp.Get(vp.GetRoomID())
+
 	chat := &Chat{
 		Server: serverAddr,
 		config: irc.ClientConfig{
@@ -75,12 +77,12 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string,
 
 		logger: chatLogInteral{
 			MsgLogger: chatWriters,
-			ChatFile:  getChatLogWriter(vp.GetRoom().GetNick()),
+			ChatFile:  getChatLogWriter(roomViewer.GetNick()),
 		},
 	}
 
 	chat.Logf(LogCatSilent, "+------------ New Log [%s] ------------+ %s",
-		chat.viewers.GetRoom().GetNick(), time.Now().Format(time.RFC822Z))
+		roomViewer.GetNick(), time.Now().Format(time.RFC822Z))
 
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
@@ -91,7 +93,7 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string,
 func (c *Chat) tickRoomActive() {
 	log.Println("Tick room Active")
 	for _, v := range c.InRoom {
-		v.Chatter.updateActive()
+		c.updateOrSetChatter(v, v.GetNick())
 	}
 }
 
@@ -147,11 +149,12 @@ func (c *Chat) WriteRawIrcMsg(msg string) {
 
 func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.InRoom = make(map[IrcNick]*Viewer)
+	roomViewer := c.viewers.Get(c.viewers.GetRoomID())
 
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/membership")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/tags")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/commands")
-	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.viewers.GetRoom().GetNick()))
+	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", roomViewer.GetNick()))
 }
 
 func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
@@ -164,8 +167,9 @@ func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
 }
 
 func (c *Chat) hostUpdate(src IrcNick, target IrcNick, numViewers int) error {
+	roomViewer := c.viewers.Get(c.viewers.GetRoomID())
+	roomNick := roomViewer.GetNick()
 
-	roomNick := c.viewers.GetRoom().GetNick()
 	if src == roomNick {
 		// You are now hosting
 		c.Logf(LogCatSystem, "You are hosting %s with %d viewers", target, numViewers)
@@ -262,16 +266,22 @@ func JoinNicks(nl []IrcNick, columns int, nickPadLength int) string {
 	return nickformated
 }
 
+func (c *Chat) updateOrSetChatter(v *Viewer, nick IrcNick) {
+	if v.Chatter == nil {
+		v.SetChatter(createChatter(nick, nil))
+	} else {
+		v.m.Lock()
+		v.Chatter.updateActive()
+		v.m.Unlock()
+	}
+}
+
 func (c *Chat) processNameList() {
 	vList := c.viewers.UpdateViewers(c.nameReplyList)
 
 	for _, v := range vList {
 		nick := v.GetNick()
-		if v.Chatter == nil {
-			v.Chatter = createChatter(nick, nil)
-		} else {
-			v.Chatter.updateActive()
-		}
+		c.updateOrSetChatter(v, nick)
 		c.InRoom[nick] = v
 	}
 }
@@ -333,18 +343,14 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		nick := IrcNick(m.Name)
 		c.Logf(LogCatSystem, "Join %s", nick)
 
-		v, err := c.viewers.FindViewer(nick)
+		v, err := c.viewers.Find(nick)
 		if err != nil {
 			log.Printf("JOIN ERROR [%s] not found\n%s", nick, err)
 			return
 		}
 
 		c.InRoom[nick] = v
-		if v.Chatter == nil {
-			v.Chatter = createChatter(nick, m)
-		} else {
-			v.Chatter.updateActive()
-		}
+		c.updateOrSetChatter(v, nick)
 
 	case IrcCmdPart: // User Parted Channel
 		c.Logf(LogCatSystem, "Part %s", m.Name)
@@ -352,7 +358,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		nick := IrcNick(m.Name)
 		v, ok := c.InRoom[nick]
 		if ok {
-			v.Chatter.updateActive()
+			c.updateOrSetChatter(v, nick)
 			delete(c.InRoom, nick)
 		}
 
@@ -361,7 +367,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case TwitchCmdGlobalUserState:
 		cu := createChatter(IrcNick(m.Name), m)
-		v := c.viewers.GetViewerFromChatter(*cu)
+		v := c.viewers.GetFromChatter(cu)
 		c.Logf(LogCatSilent, "Global User State for %s", v.GetNick())
 
 	case TwitchCmdRoomState:
@@ -421,12 +427,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	case TwitchCmdUserNotice:
 		cu := createChatter(IrcNick(m.Name), m)
-		c.viewers.GetViewerFromChatter(*cu)
+		c.viewers.GetFromChatter(cu)
 		c.Logf(LogCatSystem, "%s", m.Tags[TwitchTagSystemMsg])
 
 	case TwitchCmdUserState:
 		cu := createChatter(IrcNick(m.Name), m)
-		v := c.viewers.GetViewerFromChatter(*cu)
+		v := c.viewers.GetFromChatter(cu)
 
 		c.InRoom[v.GetNick()] = v
 		c.Logf(LogCatSystem, "User State updated from %s in %s", v.GetNick(), m.Trailing())
@@ -480,16 +486,18 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 
-		v, err := c.viewers.FindViewer(nick)
+		v, err := c.viewers.Find(nick)
 		if err != nil {
 			log.Printf("PRIV MSG ERROR [%s] not found\n%s", nick, err)
 			return
 		}
 
 		if v.Chatter == nil {
-			v.Chatter = createChatter(nick, m)
+			v.SetChatter(createChatter(nick, m))
 		} else {
+			v.m.Lock()
 			v.Chatter.updateChatterFromTags(m)
+			v.m.Unlock()
 		}
 
 		// Priority Badge

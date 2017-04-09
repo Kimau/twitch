@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -86,11 +85,9 @@ type Client struct {
 	RoomID     ID
 	RoomStream *StreamBody
 
-	viewLock      sync.Mutex
-	viewers       map[ID]*Viewer
-	FollowerCache map[ID]time.Time
 	PendingLogins map[authInternalState]time.Time
 
+	Viewers *ViewerMethod
 	Chat    *Chat
 	User    *UsersMethod
 	Channel *ChannelsMethod
@@ -111,19 +108,16 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 		httpClient:   &http.Client{},
 		AdminChannel: make(chan int, 3),
 
-		viewers:       make(map[ID]*Viewer),
-		FollowerCache: make(map[ID]time.Time),
 		PendingLogins: make(map[authInternalState]time.Time),
 	}
 
 	kb.loadSecrets()
 
+	kb.Viewers = CreateViewerMethod(&kb)
 	hvd, err := LoadMostRecentViewerDump(kb.RoomName)
 	if err == nil {
-		for k := range hvd.ViewerData {
-			newV := new(Viewer)
-			*newV = hvd.ViewerData[k]
-			kb.viewers[k] = newV
+		for _, v := range hvd.ViewerData {
+			kb.Viewers.Set(v)
 		}
 	} else {
 		log.Printf("Unable to load old user data")
@@ -182,7 +176,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	tid := ID(cList[0])
 
 	// Try Find User
-	vwr := ah.GetViewer(tid)
+	vwr := ah.Viewers.Get(tid)
 
 	// User isn't Auth start login
 	if vwr.Auth == nil || (vwr.Auth.checkCookie(c) == false) {
@@ -238,10 +232,10 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 
 func (ah *Client) adminHasAuthed() {
 	ah.AdminID = ah.AdminAuth.Token.UserID
-	ah.GetViewer(ah.AdminID)
+	ah.Viewers.Get(ah.AdminID) // Load up in Background
 
 	// Get Room we are Watching
-	roomViewer, err := ah.FindViewer(ah.RoomName)
+	roomViewer, err := ah.Viewers.Find(ah.RoomName)
 	if err != nil {
 		log.Fatalf("Unable to find room [%s]\n%s", ah.RoomName, err)
 	}
@@ -252,7 +246,7 @@ func (ah *Client) adminHasAuthed() {
 	go func() {
 		followChan := ah.Channel.GetAllFollowersSlow(ah.RoomID, time.Second, true)
 		for fList, ok := <-followChan; ok; fList, ok = <-followChan {
-			ah.updateFollowerCache(fList)
+			ah.Viewers.UpdateFollowers(fList)
 		}
 	}()
 
@@ -268,7 +262,7 @@ func (ah *Client) adminHasAuthed() {
 
 func (ah *Client) startNewChat() {
 
-	c, err := createIrcClient(ah.AdminAuth, ah, ah.IrcServerAddr, ah.chatWriters)
+	c, err := createIrcClient(ah.AdminAuth, ah.Viewers, ah.IrcServerAddr, ah.chatWriters)
 	if err != nil {
 		log.Printf("Failed to Start New Chat %s", err.Error())
 		return

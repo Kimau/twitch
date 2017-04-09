@@ -132,21 +132,28 @@ func (ah *Client) DumpViewers() error {
 	}
 
 	enc := gob.NewEncoder(f)
-	for _, v := range ah.viewers {
+	ah.Viewers.m.Lock()
+	for _, vid := range ah.Viewers.AllKeys() {
+		v := ah.Viewers.Get(vid)
+		v.m.Lock()
 		err = enc.Encode(v)
+		v.m.Unlock()
 		if err != nil {
 			f.Close()
+			ah.Viewers.m.Unlock()
 			return err
 		}
+
 	}
+	ah.Viewers.m.Unlock()
 
 	log.Printf("Dumped data to file: %s", f.Name())
 	f.Close()
 	return nil
 }
 
-// GetViewerDumpListing - Listing of All Fumps in this folder
-func GetViewerDumpListing(chanName IrcNick) [][]string {
+// GetDumpListing - Listing of All Fumps in this folder
+func GetDumpListing(chanName IrcNick) [][]string {
 	sList := [][]string{}
 
 	files, err := ioutil.ReadDir("./data/")
@@ -191,7 +198,7 @@ func GetChatLogListing() []string {
 
 // LoadMostRecentViewerDump - Load the most recent User Data for User
 func LoadMostRecentViewerDump(chanName IrcNick) (*HistoricViewerData, error) {
-	listings := GetViewerDumpListing(chanName)
+	listings := GetDumpListing(chanName)
 	bigNum := 0
 
 	// Get Highest Num
