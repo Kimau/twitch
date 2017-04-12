@@ -32,6 +32,12 @@ func (ah *Client) AdminHTTP(w http.ResponseWriter, req *http.Request) {
 		vList := ah.Viewers.UpdateViewers(nickList)
 		fmt.Fprintf(w, "%#v", vList)
 
+	case strings.HasPrefix(relPath, "clientid"):
+		w.Header().Set("Content-Type", "application/javascript")
+		fmt.Fprintf(w, `var clientId = '%s'; var redirectURI = '%s';`,
+			ah.ClientID,
+			fmt.Sprintf(redirStringURL, ah.domain))
+
 	case strings.HasPrefix(relPath, "chat"):
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Fprint(w, ah.Chat.ReadChatFull())

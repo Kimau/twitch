@@ -1,8 +1,14 @@
 package twitch
 
 import (
+	"fmt"
 	"log"
+	"runtime/debug"
 	"sync"
+)
+
+const (
+	debugViewerLock = false
 )
 
 // Viewer is basic Viewer
@@ -14,36 +20,52 @@ type Viewer struct {
 	Chatter  *Chatter       `json:"chatter"` // Read Only - not enforced for perf reasons
 	Follower *ChannelFollow `json:"follow"`  // Read Only - not enforced for perf reasons
 
-	m      sync.Mutex
+	mylock sync.Mutex
 	client *Client
+}
+
+func (vw *Viewer) lockme() {
+	vw.mylock.Lock()
+	if debugViewerLock {
+		fmt.Println("- LOCK -", vw.TwitchID)
+		debug.PrintStack()
+	}
+}
+
+func (vw *Viewer) unlockme() {
+	vw.mylock.Unlock()
+	if debugViewerLock {
+		fmt.Println("- UNLOCK -", vw.TwitchID)
+		debug.PrintStack()
+	}
 }
 
 //SetUser - Sets the new value in with lock
 func (vw *Viewer) SetUser(newVal User) {
-	vw.m.Lock()
+	vw.lockme()
 	vw.User = &newVal
-	vw.m.Unlock()
+	vw.unlockme()
 }
 
 //SetAuth - Sets the new value in with lock
 func (vw *Viewer) SetAuth(newVal UserAuth) {
-	vw.m.Lock()
+	vw.lockme()
 	vw.Auth = &newVal
-	vw.m.Unlock()
+	vw.unlockme()
 }
 
 //ClearAuth - Clear the Value with lock
 func (vw *Viewer) ClearAuth() {
-	vw.m.Lock()
+	vw.lockme()
 	vw.Auth = nil
-	vw.m.Unlock()
+	vw.unlockme()
 }
 
 //SetChatter - Sets the new value in with lock
 func (vw *Viewer) SetChatter(newVal Chatter) {
-	vw.m.Lock()
+	vw.lockme()
 	vw.Chatter = &newVal
-	vw.m.Unlock()
+	vw.unlockme()
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct

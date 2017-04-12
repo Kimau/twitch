@@ -13,7 +13,7 @@ import (
 type ViewerMethod struct {
 	client *Client
 
-	m             sync.Mutex
+	mapLock       sync.Mutex
 	viewers       map[ID]Viewer
 	followerCache map[ID]time.Time
 }
@@ -26,6 +26,14 @@ func CreateViewerMethod(c *Client) *ViewerMethod {
 		viewers:       make(map[ID]Viewer),
 		followerCache: make(map[ID]time.Time),
 	}
+}
+
+func (vm *ViewerMethod) lockmap() {
+	vm.mapLock.Lock()
+}
+
+func (vm *ViewerMethod) unlockmap() {
+	vm.mapLock.Unlock()
 }
 
 // GetRoomID - Get ID of Room
@@ -41,39 +49,41 @@ func (vm *ViewerMethod) Set(v Viewer) {
 	}
 	newV = v
 
-	vm.m.Lock()
+	vm.lockmap()
+	defer vm.unlockmap()
+
 	vm.viewers[v.TwitchID] = newV
 	if newV.Follower == nil {
 		delete(vm.followerCache, newV.TwitchID)
 	} else {
 		vm.followerCache[newV.TwitchID] = ChannelRelationship(*newV.Follower).CreatedAt()
 	}
-	vm.m.Unlock()
 }
 
 //SetFollower - Sets the new value in with lock
 func (vm *ViewerMethod) SetFollower(newVal ChannelFollow) {
 	v := vm.GetFromUser(*newVal.User)
-	v.m.Lock()
+	v.lockme()
 	v.Follower = &newVal
-	v.m.Unlock()
+	v.unlockme()
 
-	vm.m.Lock()
+	vm.lockmap()
 	vm.followerCache[newVal.User.ID] = ChannelRelationship(newVal).CreatedAt()
-	vm.m.Unlock()
+	vm.unlockmap()
 }
 
 //ClearFollower - Sets the new value in with lock
 func (vm *ViewerMethod) ClearFollower(tid ID) {
-	vm.m.Lock()
+	vm.lockmap()
+	defer vm.unlockmap()
+
 	v, ok := vm.viewers[tid]
 	if ok {
-		v.m.Lock()
+		v.lockme()
 		v.Follower = nil
-		v.m.Unlock()
+		v.unlockme()
 	}
 	delete(vm.followerCache, tid)
-	vm.m.Unlock()
 }
 
 // IsFollower - IS the person a follower
@@ -84,22 +94,24 @@ func (vm *ViewerMethod) IsFollower(tid ID) (bool, time.Time) {
 
 // AllKeys - Get All Viewer IDs slower than a direct range over
 func (vm *ViewerMethod) AllKeys() []ID {
-	vm.m.Lock()
+	vm.lockmap()
+	defer vm.unlockmap()
+
 	myKeys := make([]ID, len(vm.viewers))
 	i := 0
 	for k := range vm.viewers {
 		myKeys[i] = k
 		i++
 	}
-	vm.m.Unlock()
+
 	return myKeys
 }
 
 // Get - Get Viewer by ID
 func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
-	vm.m.Lock()
+	vm.lockmap()
 	v, ok := vm.viewers[twitchID]
-	vm.m.Unlock()
+	vm.unlockmap()
 	if ok {
 		return &v
 	}
@@ -119,10 +131,9 @@ func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
 
 // GetFromUser - Get Viewer from User
 func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
-
-	vm.m.Lock()
+	vm.lockmap()
 	v, ok := vm.viewers[usr.ID]
-	vm.m.Unlock()
+	vm.unlockmap()
 
 	if ok {
 		v.SetUser(usr)
@@ -132,9 +143,10 @@ func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 			client:   vm.client,
 			User:     &usr,
 		}
-		vm.m.Lock()
+
+		vm.lockmap()
 		vm.viewers[usr.ID] = v
-		vm.m.Unlock()
+		vm.unlockmap()
 	}
 
 	return &v
@@ -169,8 +181,8 @@ func (vm *ViewerMethod) GetFromChatter(cu Chatter) *Viewer {
 }
 
 func (vm *ViewerMethod) findViewerByName(nick IrcNick) *Viewer {
-	vm.m.Lock()
-	defer vm.m.Unlock()
+	vm.lockmap()
+	defer vm.unlockmap()
 
 	nick = IrcNick(strings.ToLower(string(nick)))
 	for _, v := range vm.viewers {
@@ -237,33 +249,34 @@ func (vm *ViewerMethod) UpdateViewers(nickList []IrcNick) []*Viewer {
 }
 
 func (vm *ViewerMethod) updateInteralFollowerCache(f ChannelFollow) {
-	vm.m.Lock()
+	vm.lockmap()
 	vm.followerCache[f.User.ID] = ChannelRelationship(f).CreatedAt()
-	vm.m.Unlock()
+	vm.unlockmap()
 }
 
 // UpdateFollowers - Update Followers values and stored cache
 func (vm *ViewerMethod) UpdateFollowers(fList []ChannelFollow) {
 	for _, f := range fList {
 		v := vm.GetFromUser(*f.User)
-		v.m.Lock()
+
+		v.lockme()
 		v.Follower = &f
-		v.m.Unlock()
+		v.unlockme()
 	}
 
-	vm.m.Lock()
+	vm.lockmap()
 	for _, f := range fList {
 		vm.followerCache[f.User.ID] = ChannelRelationship(f).CreatedAt()
 	}
-	vm.m.Unlock()
-
+	vm.unlockmap()
 }
 
 // GetRandomFollowers - Returns Random Follow for Channel
 func (vm *ViewerMethod) GetRandomFollowers(numFollowers int) []*Viewer {
 
-	// Start Lock
-	vm.m.Lock()
+	// Lock
+	vm.lockmap()
+	defer vm.unlockmap()
 
 	mapLength := len(vm.followerCache)
 	listOfOffset := rand.Perm(mapLength)
@@ -288,8 +301,6 @@ func (vm *ViewerMethod) GetRandomFollowers(numFollowers int) []*Viewer {
 
 		offset++
 	}
-	vm.m.Unlock()
-	// Free Lock
 
 	for i := 0; i < len(vRes); i++ {
 		if vRes[i] == nil {
@@ -307,6 +318,10 @@ func (vm *ViewerMethod) GetRandomFollowers(numFollowers int) []*Viewer {
 func (vm *ViewerMethod) MostUpToDateViewer(numFollowers int) (*Viewer, time.Time) {
 	var mostRecentViewer *Viewer
 	oldTime := time.Unix(0, 0)
+
+	// Lock
+	vm.lockmap()
+	defer vm.unlockmap()
 
 	for _, v := range vm.viewers {
 		if v.User == nil {

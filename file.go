@@ -132,20 +132,19 @@ func (ah *Client) DumpViewers() error {
 	}
 
 	enc := gob.NewEncoder(f)
-	ah.Viewers.m.Lock()
+	ah.Viewers.lockmap()
+	defer ah.Viewers.unlockmap()
 	for _, vid := range ah.Viewers.AllKeys() {
 		v := ah.Viewers.Get(vid)
-		v.m.Lock()
+		v.lockme()
 		err = enc.Encode(v)
-		v.m.Unlock()
+		v.unlockme()
 		if err != nil {
 			f.Close()
-			ah.Viewers.m.Unlock()
 			return err
 		}
 
 	}
-	ah.Viewers.m.Unlock()
 
 	log.Printf("Dumped data to file: %s", f.Name())
 	f.Close()

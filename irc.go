@@ -270,9 +270,9 @@ func (c *Chat) updateOrSetChatter(v *Viewer, nick IrcNick) {
 	if v.Chatter == nil {
 		v.SetChatter(createChatter(nick, nil))
 	} else {
-		v.m.Lock()
+		v.lockme()
 		v.Chatter.updateActive()
-		v.m.Unlock()
+		v.unlockme()
 	}
 }
 
@@ -495,9 +495,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		if v.Chatter == nil {
 			v.SetChatter(createChatter(nick, m))
 		} else {
-			v.m.Lock()
+			v.lockme()
 			v.Chatter.updateChatterFromTags(m)
-			v.m.Unlock()
+			v.unlockme()
 		}
 
 		// Priority Badge
