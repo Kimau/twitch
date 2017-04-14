@@ -132,8 +132,6 @@ func (ah *Client) DumpViewers() error {
 	}
 
 	enc := gob.NewEncoder(f)
-	ah.Viewers.lockmap()
-	defer ah.Viewers.unlockmap()
 	for _, vid := range ah.Viewers.AllKeys() {
 		v := ah.Viewers.Get(vid)
 		v.lockme()
