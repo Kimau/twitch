@@ -92,8 +92,18 @@ type LogLineParsedMsg struct {
 	Emotes  EmoteReplaceListFromBack
 }
 
+type subToChatPump struct {
+	Name   string
+	Subbed []LogCat
+	C      chan LogLineParsed
+}
+
 type chatLogInteral struct {
-	MsgLogger []ChatLogger
+	subbedToChat []subToChatPump
+	newSubs      chan subToChatPump
+	killSubs     chan subToChatPump
+	newLines     chan LogLineParsed
+
 	ChatLines [numInteralLogLines]LogLineParsed
 	ChatFile  io.Writer
 
@@ -102,13 +112,10 @@ type chatLogInteral struct {
 	hasWrapped  bool
 }
 
-// ChatLogger - Write LogLineParsed
-type ChatLogger interface {
-	Write(LogLineParsed) error
-}
-
 // LogLine - Log Line
 func (cli *chatLogInteral) LogLine(llp LogLineParsed) {
+	// Write to Subs
+	cli.newLines <- llp
 
 	// To avoid reusing memory
 	safeLine := llp
@@ -133,10 +140,6 @@ func (cli *chatLogInteral) LogLine(llp LogLineParsed) {
 	}
 
 	fmt.Fprint(cli.ChatFile, safeLine.String())
-
-	for _, w := range cli.MsgLogger {
-		w.Write(safeLine)
-	}
 }
 
 // LogLine - Log to internal message logger
@@ -382,5 +385,80 @@ func (llp *LogLineParsed) UpdateBody() {
 		llp.Body = fmt.Sprintf("%s %s %s [%d] : %s", llp.Msg.UserID, llp.Msg.Badge, llp.Msg.Nick, llp.Msg.Bits, llp.Msg.Content)
 	} else {
 		llp.Body = fmt.Sprintf("%s %s %s : %s", llp.Msg.UserID, llp.Msg.Badge, llp.Msg.Nick, llp.Msg.Content)
+	}
+}
+
+// startChatLogPump - Start the internal go routine and create the pump
+func startChatLogPump(room IrcNick) *chatLogInteral {
+
+	cli := chatLogInteral{
+		newSubs:  make(chan subToChatPump, 10),
+		killSubs: make(chan subToChatPump, 10),
+		newLines: make(chan LogLineParsed, 10),
+		ChatFile: getChatLogWriter(room),
+	}
+
+	go cli.run()
+
+	return &cli
+}
+
+// run - The Goroutine loop that is close by closing the channel
+func (cli *chatLogInteral) run() {
+
+pumpLoop:
+	for {
+		select {
+		case deadSub, ok := <-cli.killSubs:
+			if !ok {
+				break pumpLoop
+			}
+
+			subs := []subToChatPump{}
+			for _, sub := range cli.subbedToChat {
+				if sub.C == deadSub.C {
+					close(deadSub.C)
+				} else {
+					subs = append(subs, sub)
+				}
+			}
+			cli.subbedToChat = subs
+
+		case newSub, ok := <-cli.newSubs:
+			if !ok {
+				break pumpLoop
+			}
+
+			cli.subbedToChat = append(cli.subbedToChat, newSub)
+
+		case llp := <-cli.newLines:
+			cli.postInternal(llp)
+		}
+	}
+
+	// Close all alert Channels
+	for _, sub := range cli.subbedToChat {
+		close(sub.C)
+	}
+}
+
+// postInternal - Manages the Actual Posting of the Line
+func (cli *chatLogInteral) postInternal(llp LogLineParsed) {
+
+	// Forward Alert
+SubLoop:
+	for _, subs := range cli.subbedToChat {
+		// Check if Channel is Subbed to this Topic
+		for _, t := range subs.Subbed {
+			if t == llp.Cat {
+				select {
+				case subs.C <- llp:
+				default: // Non blocking
+				}
+				continue SubLoop
+			}
+		}
+
+		// Not Subbed to Topic
 	}
 }

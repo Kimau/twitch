@@ -108,7 +108,7 @@ func (dh *DummyHandler) Handle(c *irc.Client, m *irc.Message) {
 
 func TestIrcMessage(t *testing.T) {
 
-	chat, err := createIrcClient(&DummyAuth{}, &DummyViewProvider{}, "", nil)
+	chat, err := createIrcClient(&DummyAuth{}, &DummyViewProvider{}, "")
 	chat.config.Handler = chat
 
 	if err != nil {

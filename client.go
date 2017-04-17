@@ -75,8 +75,6 @@ type Client struct {
 	domain     string
 	servePath  string
 
-	chatWriters []ChatLogger
-
 	AdminID      ID
 	AdminAuth    *UserAuth
 	AdminChannel chan int
@@ -97,13 +95,12 @@ type Client struct {
 }
 
 // CreateTwitchClient -
-func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin string, chatWriterList []ChatLogger) (*Client, error) {
+func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin string) (*Client, error) {
 	kb := Client{
 		domain:    servingFromDomain,
 		servePath: servingFromDomain[strings.Index(servingFromDomain, "/"):],
 
-		RoomName:    IrcNick(roomToJoin),
-		chatWriters: chatWriterList,
+		RoomName: IrcNick(roomToJoin),
 
 		httpClient:   &http.Client{},
 		AdminChannel: make(chan int, 3),
@@ -262,7 +259,7 @@ func (ah *Client) adminHasAuthed() {
 
 func (ah *Client) startNewChat() {
 
-	c, err := createIrcClient(ah.AdminAuth, ah.Viewers, ah.IrcServerAddr, ah.chatWriters)
+	c, err := createIrcClient(ah.AdminAuth, ah.Viewers, ah.IrcServerAddr)
 	if err != nil {
 		log.Printf("Failed to Start New Chat %s", err.Error())
 		return

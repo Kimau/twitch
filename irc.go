@@ -43,7 +43,7 @@ type Chat struct {
 	messageOfTheDay []string
 	nameReplyList   []IrcNick
 
-	logger chatLogInteral
+	logger *chatLogInteral
 
 	viewers       viewerProvider
 	irc           *irc.Client
@@ -54,7 +54,7 @@ func init() {
 
 }
 
-func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string, chatWriters []ChatLogger) (*Chat, error) {
+func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string) (*Chat, error) {
 
 	log.Println("Creating IRC Client")
 
@@ -75,10 +75,7 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string,
 		},
 		viewers: vp,
 
-		logger: chatLogInteral{
-			MsgLogger: chatWriters,
-			ChatFile:  getChatLogWriter(roomViewer.GetNick()),
-		},
+		logger: startChatLogPump(roomViewer.GetNick()),
 	}
 
 	chat.Logf(LogCatSilent, "+------------ New Log [%s] ------------+ %s",
@@ -643,5 +640,25 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 	default:
 		log.Printf("IRC ???[%s] \t %+v", m.Command, m)
+	}
+}
+
+// Sub - Create a Subsciption to Alerts
+func (c *Chat) Sub(subName string, topics []LogCat) chan LogLineParsed {
+	newSub := make(chan LogLineParsed, 10)
+	c.logger.newSubs <- subToChatPump{
+		Name:   subName,
+		Subbed: topics,
+		C:      newSub,
+	}
+
+	return newSub
+}
+
+// Unsub - Kill a Subscription Channel
+func (c *Chat) Unsub(deadChannel chan LogLineParsed) {
+	c.logger.killSubs <- subToChatPump{
+		Name: "dead",
+		C:    deadChannel,
 	}
 }
