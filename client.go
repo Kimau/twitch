@@ -116,8 +116,20 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 		for _, v := range hvd.ViewerData {
 			kb.Viewers.Set(v)
 		}
+
+		err = kb.Viewers.SanityScan()
+		if err != nil {
+			for k, v := range kb.Viewers.viewers {
+				b, _ := json.Marshal(v)
+				fmt.Println(k, string(b))
+			}
+
+			panic(err)
+		}
+		fmt.Println("===== LOADED VIEWERS FROM FILES ====")
+
 	} else {
-		log.Printf("Unable to load old user data")
+		log.Printf("Unable to load old user data: %s", err)
 	}
 
 	// Creat Admin Auth Temp
@@ -253,6 +265,10 @@ func (ah *Client) adminHasAuthed() {
 	}
 
 	go ah.Heart.StartBeat()
+
+	// HACK :: Filthy Hack
+	// Allow a brief startup gap for responses ect...
+	time.Sleep(time.Second * 1)
 
 	ah.AdminChannel <- 1
 }

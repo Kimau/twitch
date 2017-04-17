@@ -133,7 +133,7 @@ func (ah *Client) DumpViewers() error {
 
 	enc := gob.NewEncoder(f)
 	for _, vid := range ah.Viewers.AllKeys() {
-		v := ah.Viewers.Get(vid)
+		v := *ah.Viewers.Get(vid)
 		v.lockme()
 		err = enc.Encode(v)
 		v.unlockme()
@@ -248,16 +248,19 @@ func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 	dec := gob.NewDecoder(f)
 
 	// Pull out all Viewers
-	v := Viewer{}
-	for err := dec.Decode(&v); err != io.EOF; err = dec.Decode(&v) {
+	for {
+		v := Viewer{}
+		err := dec.Decode(&v)
+
 		if err != nil {
+			if err == io.EOF {
+				return &hvd, nil
+			}
 			return nil, err
 		}
 
 		hvd.ViewerData[v.TwitchID] = v
 	}
-
-	return &hvd, nil
 }
 
 // LoadChatForAnalysis - Load Chat Log for Analysis

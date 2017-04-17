@@ -52,7 +52,7 @@ func (vm *ViewerMethod) Set(v Viewer) {
 	vm.lockmap()
 	defer vm.unlockmap()
 
-	vm.viewers[v.TwitchID] = newV
+	vm.viewers[newV.TwitchID] = newV
 	if newV.Follower == nil {
 		delete(vm.followerCache, newV.TwitchID)
 	} else {
@@ -336,4 +336,26 @@ func (vm *ViewerMethod) MostUpToDateViewer(numFollowers int) (*Viewer, time.Time
 	}
 
 	return mostRecentViewer, oldTime
+}
+
+// SanityScan - Checks Viewer Data for Issues
+func (vm *ViewerMethod) SanityScan() error {
+	vm.lockmap()
+	defer vm.unlockmap()
+
+	for k, v := range vm.viewers {
+		if k != v.TwitchID {
+			return fmt.Errorf("Twitch ID doesn't match %s\n\t %s != %s", v.GetNick(), k, v.TwitchID)
+		}
+
+		if v.User == nil {
+			return fmt.Errorf("User is nil: %s", k)
+		}
+
+		if k != v.User.ID {
+			return fmt.Errorf("User ID doesn't match %s\n\t %s != %s", v.GetNick(), k, v.User.ID)
+		}
+	}
+
+	return nil
 }

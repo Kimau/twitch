@@ -74,6 +74,7 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 			Name: "Full Name",
 		},
 		viewers: vp,
+		InRoom:  make(map[IrcNick]*Viewer),
 
 		logger: startChatLogPump(roomViewer.GetNick()),
 	}
@@ -145,13 +146,10 @@ func (c *Chat) WriteRawIrcMsg(msg string) {
 }
 
 func (c *Chat) respondToWelcome(m *irc.Message) {
-	c.InRoom = make(map[IrcNick]*Viewer)
-	roomViewer := c.viewers.Get(c.viewers.GetRoomID())
-
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/membership")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/tags")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/commands")
-	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", roomViewer.GetNick()))
+	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.weakClientRef.RoomName))
 }
 
 func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
