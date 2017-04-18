@@ -136,12 +136,6 @@ func (ah *Client) DumpViewers() error {
 		v := *ah.Viewers.Get(vid)
 		v.lockme()
 
-		if v.Chatter == nil {
-			log.Printf("Loaded %s \t- NO CHATTER", v.GetNick())
-		} else {
-			log.Printf("Loaded %s \t- %s", v.GetNick(), v.Chatter.TimeInChannel.String())
-		}
-
 		err = enc.Encode(v)
 		v.unlockme()
 		if err != nil {
@@ -264,12 +258,6 @@ func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 				return &hvd, nil
 			}
 			return nil, err
-		}
-
-		if v.Chatter == nil {
-			log.Printf("Loaded %s \t- NO CHATTER", v.GetNick())
-		} else {
-			log.Printf("Loaded %s \t- %s", v.GetNick(), v.Chatter.TimeInChannel.String())
 		}
 
 		hvd.ViewerData[v.TwitchID] = v

@@ -29,16 +29,7 @@ type Chatter struct {
 	id ID // not cannonical data
 }
 
-func (cu *Chatter) updateActive() {
-	newTime := time.Now()
-	timeSince := newTime.Sub(cu.LastActive)
-
-	cu.TimeInChannel += timeSince
-	cu.LastActive = newTime
-}
-
 func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
-	cu.updateActive()
 
 	for tagName, tagVal := range m.Tags {
 		switch tagName {

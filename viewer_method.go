@@ -14,7 +14,7 @@ type ViewerMethod struct {
 	client *Client
 
 	mapLock       sync.Mutex
-	viewers       map[ID]Viewer
+	viewers       map[ID]*Viewer
 	followerCache map[ID]time.Time
 }
 
@@ -23,7 +23,7 @@ func CreateViewerMethod(c *Client) *ViewerMethod {
 	return &ViewerMethod{
 		client: c,
 
-		viewers:       make(map[ID]Viewer),
+		viewers:       make(map[ID]*Viewer),
 		followerCache: make(map[ID]time.Time),
 	}
 }
@@ -46,13 +46,9 @@ func (vm *ViewerMethod) Set(v Viewer) {
 	vm.lockmap()
 	defer vm.unlockmap()
 
-	newV := Viewer{
-		TwitchID: v.TwitchID,
-		client:   vm.client,
-	}
-	newV = v
+	newV := vm.allocViewer(v.TwitchID)
+	*newV = v
 
-	vm.viewers[newV.TwitchID] = newV
 	if newV.Follower == nil {
 		delete(vm.followerCache, newV.TwitchID)
 	} else {
@@ -113,7 +109,7 @@ func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
 	v, ok := vm.viewers[twitchID]
 	vm.unlockmap()
 	if ok {
-		return &v
+		return v
 	}
 
 	u, err := vm.client.User.Get(twitchID)
@@ -129,6 +125,16 @@ func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
 	return vm.GetFromUser(*u)
 }
 
+func (vm *ViewerMethod) allocViewer(tid ID) *Viewer {
+	v := new(Viewer)
+	v.TwitchID = tid
+	v.client = vm.client
+
+	vm.viewers[tid] = v
+
+	return v
+}
+
 // GetFromUser - Get Viewer from User
 func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 	vm.lockmap()
@@ -139,16 +145,13 @@ func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 	if ok {
 		v.SetUser(usr)
 	} else {
-		v = Viewer{
-			TwitchID: usr.ID,
-			client:   vm.client,
-			User:     &usr,
-		}
-
-		vm.viewers[usr.ID] = v
+		v = vm.allocViewer(usr.ID)
+		v.User = &usr
 	}
 
-	return &v
+	v.CreateChatter()
+
+	return v
 }
 
 // GetFromChatter - Get Viewer from Chatter
@@ -184,9 +187,10 @@ func (vm *ViewerMethod) findViewerByName(nick IrcNick) *Viewer {
 	defer vm.unlockmap()
 
 	nick = IrcNick(strings.ToLower(string(nick)))
-	for _, v := range vm.viewers {
+	for k := range vm.viewers {
+		v := vm.viewers[k]
 		if v.User.Name == nick {
-			return &v
+			return v
 		}
 	}
 	return nil
@@ -296,7 +300,7 @@ func (vm *ViewerMethod) GetRandomFollowers(numFollowers int) []*Viewer {
 		for _, x := range listOfOffset {
 			if x == offset {
 				v := vm.viewers[i]
-				vRes[c] = &v
+				vRes[c] = v
 				c++
 				break
 			}
@@ -326,7 +330,9 @@ func (vm *ViewerMethod) MostUpToDateViewer(numFollowers int) (*Viewer, time.Time
 	vm.lockmap()
 	defer vm.unlockmap()
 
-	for _, v := range vm.viewers {
+	for k := range vm.viewers {
+		v := vm.viewers[k]
+
 		if v.User == nil {
 			continue
 		}
@@ -334,7 +340,7 @@ func (vm *ViewerMethod) MostUpToDateViewer(numFollowers int) (*Viewer, time.Time
 		updatedTime := v.User.UpdatedAt()
 		if updatedTime.After(oldTime) {
 			oldTime = updatedTime
-			mostRecentViewer = &v
+			mostRecentViewer = v
 		}
 	}
 
@@ -346,7 +352,9 @@ func (vm *ViewerMethod) SanityScan() error {
 	vm.lockmap()
 	defer vm.unlockmap()
 
-	for k, v := range vm.viewers {
+	for k := range vm.viewers {
+		v := vm.viewers[k]
+
 		if k != v.TwitchID {
 			return fmt.Errorf("Twitch ID doesn't match %s\n\t %s != %s", v.GetNick(), k, v.TwitchID)
 		}

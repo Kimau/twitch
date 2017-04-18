@@ -91,7 +91,35 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 func (c *Chat) tickRoomActive() {
 	log.Println("Tick room Active")
 	for _, v := range c.InRoom {
-		c.updateOrSetChatter(v, v.GetNick())
+		c.activeInRoom(v)
+	}
+}
+
+func (c *Chat) partRoom(v *Viewer) {
+	c.activeInRoom(v)
+	delete(c.InRoom, v.GetNick())
+}
+
+func (c *Chat) activeInRoom(v *Viewer) {
+	newTime := time.Now()
+	v.CreateChatter()
+
+	v.lockme()
+	defer v.unlockme()
+
+	nick := v.GetNick()
+	_, ok := c.InRoom[nick]
+	if !ok {
+		c.InRoom[nick] = v
+		v.Chatter.LastActive = newTime
+	} else {
+		// Earned Time
+		timeSince := newTime.Sub(v.Chatter.LastActive)
+
+		v.Chatter.TimeInChannel += timeSince
+		v.Chatter.LastActive = newTime
+
+		log.Printf("Chat: ++Awarded++ %s : %s for total of %s", nick, timeSince, v.Chatter.TimeInChannel)
 	}
 }
 
@@ -261,21 +289,11 @@ func JoinNicks(nl []IrcNick, columns int, nickPadLength int) string {
 	return nickformated
 }
 
-func (c *Chat) updateOrSetChatter(v *Viewer, nick IrcNick) {
-	v.CreateChatter(nick)
-
-	v.lockme()
-	v.Chatter.updateActive()
-	v.unlockme()
-}
-
 func (c *Chat) processNameList() {
 	vList := c.viewers.UpdateViewers(c.nameReplyList)
 
 	for _, v := range vList {
-		nick := v.GetNick()
-		c.updateOrSetChatter(v, nick)
-		c.InRoom[nick] = v
+		c.activeInRoom(v)
 	}
 }
 
@@ -342,8 +360,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 
-		c.InRoom[nick] = v
-		c.updateOrSetChatter(v, nick)
+		c.activeInRoom(v)
 
 	case IrcCmdPart: // User Parted Channel
 		c.Logf(LogCatSystem, "Part %s", m.Name)
@@ -351,8 +368,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		nick := IrcNick(m.Name)
 		v, ok := c.InRoom[nick]
 		if ok {
-			c.updateOrSetChatter(v, nick)
-			delete(c.InRoom, nick)
+			c.partRoom(v)
 		}
 
 	case TwitchCmdClearChat:
@@ -369,7 +385,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		if err != nil {
 			panic(err)
 		}
-		v.CreateChatter(nick)
+		v.CreateChatter()
 		v.Chatter.updateChatterFromTags(m)
 
 		c.Logf(LogCatSilent, "Global User State for %s", nick)
@@ -440,7 +456,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		if err != nil {
 			panic(err)
 		}
-		v.CreateChatter(nick)
+		v.CreateChatter()
 		v.lockme()
 		v.Chatter.updateChatterFromTags(m)
 		v.unlockme()
@@ -459,12 +475,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			panic(err)
 		}
 
-		v.CreateChatter(nick)
+		v.CreateChatter()
 		v.lockme()
 		v.Chatter.updateChatterFromTags(m)
 		v.unlockme()
 
-		c.InRoom[nick] = v
+		c.activeInRoom(v)
 		c.Logf(LogCatSystem, "User State updated from %s in %s", nick, m.Trailing())
 
 	case TwitchCmdHostTarget:
@@ -522,10 +538,11 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 
-		v.CreateChatter(nick)
+		v.CreateChatter()
 		v.lockme()
 		v.Chatter.updateChatterFromTags(m)
 		v.unlockme()
+		c.activeInRoom(v)
 
 		// Priority Badge
 		singleBadge := v.Chatter.SingleBadge()

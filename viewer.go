@@ -70,16 +70,13 @@ func (vw *Viewer) SetChatter(newVal Chatter) {
 }
 
 //CreateChatter - Creates Blank Chatter
-func (vw *Viewer) CreateChatter(nick IrcNick) {
+func (vw *Viewer) CreateChatter() {
 	vw.lockme()
 	if vw.Chatter == nil {
-		debug.PrintStack()
-
-		log.Printf("Created Chatter: %s \t %p", nick, vw)
-
+		log.Printf("Chat: ++Created++ %s", vw.User.Name)
 		vw.Chatter = &Chatter{
-			Nick:        nick,
-			DisplayName: string(nick),
+			Nick:        vw.User.Name,
+			DisplayName: vw.User.DisplayName,
 			Bits:        0,
 
 			Mod:      false,
