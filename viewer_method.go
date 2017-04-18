@@ -43,14 +43,14 @@ func (vm *ViewerMethod) GetRoomID() ID {
 
 // Set - Set New Viewer Value
 func (vm *ViewerMethod) Set(v Viewer) {
+	vm.lockmap()
+	defer vm.unlockmap()
+
 	newV := Viewer{
 		TwitchID: v.TwitchID,
 		client:   vm.client,
 	}
 	newV = v
-
-	vm.lockmap()
-	defer vm.unlockmap()
 
 	vm.viewers[newV.TwitchID] = newV
 	if newV.Follower == nil {
@@ -132,8 +132,9 @@ func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
 // GetFromUser - Get Viewer from User
 func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 	vm.lockmap()
+	defer vm.unlockmap()
+
 	v, ok := vm.viewers[usr.ID]
-	vm.unlockmap()
 
 	if ok {
 		v.SetUser(usr)
@@ -144,9 +145,7 @@ func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 			User:     &usr,
 		}
 
-		vm.lockmap()
 		vm.viewers[usr.ID] = v
-		vm.unlockmap()
 	}
 
 	return &v
@@ -195,6 +194,10 @@ func (vm *ViewerMethod) findViewerByName(nick IrcNick) *Viewer {
 
 // Find - Find Viewer Method
 func (vm *ViewerMethod) Find(nick IrcNick) (*Viewer, error) {
+	if nick.IsValid() == false {
+		return nil, fmt.Errorf("Invalid Nick")
+	}
+
 	v := vm.findViewerByName(nick)
 	if v != nil {
 		return v, nil

@@ -6,10 +6,6 @@ import (
 	"sync"
 )
 
-const ()
-
-var ()
-
 // Alert - The main method to find out when stuff has happened
 type Alert struct {
 	Name   AlertName `json:"name"`

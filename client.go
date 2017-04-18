@@ -246,7 +246,7 @@ func (ah *Client) adminHasAuthed() {
 	// Get Room we are Watching
 	roomViewer, err := ah.Viewers.Find(ah.RoomName)
 	if err != nil {
-		log.Fatalf("Unable to find room [%s]\n%s", ah.RoomName, err)
+		panic(fmt.Sprintf("Unable to find room [%s]\n%s", ah.RoomName, err))
 	}
 	ah.RoomID = roomViewer.TwitchID
 

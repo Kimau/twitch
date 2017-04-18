@@ -34,7 +34,7 @@ type tokenData struct {
 func (ah *Client) loadSecrets() {
 	fileData, err := ioutil.ReadFile("./data/twitch_secret.json")
 	if err != nil {
-		log.Fatalf("Failed to load token data from ./data/secret.json: \n%s", err)
+		panic(fmt.Sprintf("Failed to load token data from ./data/secret.json: \n%s", err))
 	}
 
 	sd := tokenData{}
@@ -97,7 +97,7 @@ func getChatLogWriter(roomName IrcNick) *os.File {
 		os.O_CREATE|os.O_APPEND, os.ModePerm)
 
 	if e != nil {
-		log.Fatalf("Unable to create chat log: %s\n%s", filename, e)
+		panic(fmt.Sprintf("Unable to create chat log: %s\n%s", filename, e))
 	}
 
 	return w
@@ -118,7 +118,7 @@ func localIrcMsgStore() *os.File {
 		os.O_CREATE|os.O_APPEND, os.ModePerm)
 
 	if err != nil {
-		log.Fatalf("Unable to create irc log: %s\n%s", "./data/_irc.log", err)
+		panic(fmt.Sprintf("Unable to create irc log: %s\n%s", "./data/_irc.log", err))
 	}
 
 	return localIrcMsgStoreFile
@@ -135,6 +135,13 @@ func (ah *Client) DumpViewers() error {
 	for _, vid := range ah.Viewers.AllKeys() {
 		v := *ah.Viewers.Get(vid)
 		v.lockme()
+
+		if v.Chatter == nil {
+			log.Printf("Loaded %s \t- NO CHATTER", v.GetNick())
+		} else {
+			log.Printf("Loaded %s \t- %s", v.GetNick(), v.Chatter.TimeInChannel.String())
+		}
+
 		err = enc.Encode(v)
 		v.unlockme()
 		if err != nil {
@@ -259,7 +266,14 @@ func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 			return nil, err
 		}
 
+		if v.Chatter == nil {
+			log.Printf("Loaded %s \t- NO CHATTER", v.GetNick())
+		} else {
+			log.Printf("Loaded %s \t- %s", v.GetNick(), v.Chatter.TimeInChannel.String())
+		}
+
 		hvd.ViewerData[v.TwitchID] = v
+
 	}
 }
 

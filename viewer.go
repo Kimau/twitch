@@ -5,6 +5,7 @@ import (
 	"log"
 	"runtime/debug"
 	"sync"
+	"time"
 )
 
 const (
@@ -65,6 +66,31 @@ func (vw *Viewer) ClearAuth() {
 func (vw *Viewer) SetChatter(newVal Chatter) {
 	vw.lockme()
 	vw.Chatter = &newVal
+	vw.unlockme()
+}
+
+//CreateChatter - Creates Blank Chatter
+func (vw *Viewer) CreateChatter(nick IrcNick) {
+	vw.lockme()
+	if vw.Chatter == nil {
+		debug.PrintStack()
+
+		log.Printf("Created Chatter: %s \t %p", nick, vw)
+
+		vw.Chatter = &Chatter{
+			Nick:        nick,
+			DisplayName: string(nick),
+			Bits:        0,
+
+			Mod:      false,
+			Sub:      0,
+			UserType: TwitchTypeEmpty,
+			Color:    "#000000",
+
+			TimeInChannel: 0,
+			LastActive:    time.Now(),
+		}
+	}
 	vw.unlockme()
 }
 

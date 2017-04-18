@@ -14,10 +14,10 @@ const (
 	heartDumpEvery = time.Minute * 30
 )
 
-var ()
-
 // HeartbeatData - Single Beat of the Heart
 type HeartbeatData struct {
+	Status    string    `json:"status"`
+	Game      string    `json:"game"`
 	Time      time.Time `json:"time"`
 	IsLive    bool      `json:"live"`
 	ViewCount int       `json:"view"`
@@ -105,6 +105,8 @@ func (heart *Heartbeat) beat(t time.Time) {
 	heart.client.RoomStream = sb
 
 	hbd := HeartbeatData{
+		Status:    sb.Channel.Status,
+		Game:      sb.Game,
 		Time:      t,
 		IsLive:    true,
 		ViewCount: sb.Viewers,

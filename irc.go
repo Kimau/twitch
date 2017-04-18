@@ -262,13 +262,11 @@ func JoinNicks(nl []IrcNick, columns int, nickPadLength int) string {
 }
 
 func (c *Chat) updateOrSetChatter(v *Viewer, nick IrcNick) {
-	if v.Chatter == nil {
-		v.SetChatter(createChatter(nick, nil))
-	} else {
-		v.lockme()
-		v.Chatter.updateActive()
-		v.unlockme()
-	}
+	v.CreateChatter(nick)
+
+	v.lockme()
+	v.Chatter.updateActive()
+	v.unlockme()
 }
 
 func (c *Chat) processNameList() {
@@ -361,9 +359,20 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.clearChat(m)
 
 	case TwitchCmdGlobalUserState:
-		cu := createChatter(IrcNick(m.Name), m)
-		v := c.viewers.GetFromChatter(cu)
-		c.Logf(LogCatSilent, "Global User State for %s", v.GetNick())
+		nick := IrcNick(m.Name)
+		if nick.IsValid() == false {
+			log.Printf("Global User State: Ignoring %s", nick)
+			return
+		}
+
+		v, err := c.viewers.Find(nick)
+		if err != nil {
+			panic(err)
+		}
+		v.CreateChatter(nick)
+		v.Chatter.updateChatterFromTags(m)
+
+		c.Logf(LogCatSilent, "Global User State for %s", nick)
 
 	case TwitchCmdRoomState:
 		for tagName, tagVal := range m.Tags {
@@ -421,16 +430,42 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.Logf(LogCatSystem, "%s updated: %s", chatChanName, c.mode)
 
 	case TwitchCmdUserNotice:
-		cu := createChatter(IrcNick(m.Name), m)
-		c.viewers.GetFromChatter(cu)
+		nick := IrcNick(m.Name)
+		if nick.IsValid() == false {
+			log.Printf("User Notice: Ignoring %s", nick)
+			return
+		}
+
+		v, err := c.viewers.Find(nick)
+		if err != nil {
+			panic(err)
+		}
+		v.CreateChatter(nick)
+		v.lockme()
+		v.Chatter.updateChatterFromTags(m)
+		v.unlockme()
+
 		c.Logf(LogCatSystem, "%s", m.Tags[TwitchTagSystemMsg])
 
 	case TwitchCmdUserState:
-		cu := createChatter(IrcNick(m.Name), m)
-		v := c.viewers.GetFromChatter(cu)
+		nick := IrcNick(m.Name)
+		if nick.IsValid() == false {
+			log.Printf("User State: Ignoring %s", nick)
+			return
+		}
 
-		c.InRoom[v.GetNick()] = v
-		c.Logf(LogCatSystem, "User State updated from %s in %s", v.GetNick(), m.Trailing())
+		v, err := c.viewers.Find(nick)
+		if err != nil {
+			panic(err)
+		}
+
+		v.CreateChatter(nick)
+		v.lockme()
+		v.Chatter.updateChatterFromTags(m)
+		v.unlockme()
+
+		c.InRoom[nick] = v
+		c.Logf(LogCatSystem, "User State updated from %s in %s", nick, m.Trailing())
 
 	case TwitchCmdHostTarget:
 		channelDoingTheHost := m.Params[0]
@@ -487,13 +522,10 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 
-		if v.Chatter == nil {
-			v.SetChatter(createChatter(nick, m))
-		} else {
-			v.lockme()
-			v.Chatter.updateChatterFromTags(m)
-			v.unlockme()
-		}
+		v.CreateChatter(nick)
+		v.lockme()
+		v.Chatter.updateChatterFromTags(m)
+		v.unlockme()
 
 		// Priority Badge
 		singleBadge := v.Chatter.SingleBadge()

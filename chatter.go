@@ -12,56 +12,21 @@ import (
 
 // Chatter - The IRC Chatter Data
 type Chatter struct {
-	Nick        IrcNick
-	DisplayName string
-	EmoteSets   []EmoteSet
-	Bits        int
+	Nick        IrcNick    `json:"nick"`
+	DisplayName string     `json:"display_name"`
+	EmoteSets   []EmoteSet `json:"emote_sets"`
+	Bits        int        `json:"bits"`
 
-	Mod      bool
-	Sub      int
-	UserType string
-	Badges   map[string]int
-	Color    string
+	Mod      bool           `json:"mod"`
+	Sub      int            `json:"sub"`
+	UserType string         `json:"user_type"`
+	Badges   map[string]int `json:"badges"`
+	Color    string         `json:"color"`
 
-	TimeInChannel time.Duration
-	LastActive    time.Time
+	TimeInChannel time.Duration `json:"time_in_channel"`
+	LastActive    time.Time     `json:"last_active"`
 
 	id ID // not cannonical data
-}
-
-func createChatter(nick IrcNick, m *irc.Message) Chatter {
-	if strings.Contains(string(nick), ".") {
-		// This is likely a system message
-		if m == nil {
-			log.Fatalf("createChatter shouldn't process system message: %s\n %s", nick, m)
-		}
-
-		newNick, b := m.GetTag(TwitchTagUserDisplayName)
-		if b == false {
-			log.Fatalf("createChatter couldn't recover from sys message\n %s", m)
-		}
-		nick = IrcNick(newNick)
-	}
-
-	cu := Chatter{
-		Nick:        nick,
-		DisplayName: string(nick),
-		Bits:        0,
-
-		Mod:      false,
-		Sub:      0,
-		UserType: TwitchTypeEmpty,
-		Color:    "#000000",
-
-		TimeInChannel: 0,
-		LastActive:    time.Now(),
-	}
-
-	if m != nil {
-		cu.updateChatterFromTags(m)
-	}
-
-	return cu
 }
 
 func (cu *Chatter) updateActive() {

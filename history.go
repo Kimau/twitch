@@ -3,10 +3,6 @@ package twitch
 import "time"
 import "fmt"
 
-const ()
-
-var ()
-
 // HistoricViewerData - Is a Snapshot of Viewer data at a given point in time
 type HistoricViewerData struct {
 	Name       IrcNick

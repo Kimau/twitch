@@ -3,6 +3,7 @@ package twitch
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 )
 
 // ID - Numberic Identifier of Twitch Identity
@@ -10,6 +11,13 @@ type ID string
 
 // IrcNick - Irc Nick all lowercase identifier
 type IrcNick string
+
+var validNickRegex = regexp.MustCompile("^[a-zA-Z0-9_]{3,24}$")
+
+// IsValid - Checks if a Nick is Valid
+func (nick IrcNick) IsValid() bool {
+	return validNickRegex.MatchString(string(nick))
+}
 
 // Currency use to track viewer Value
 type Currency int

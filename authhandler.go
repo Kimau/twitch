@@ -133,7 +133,7 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 		if ah.AdminAuth.Token != nil {
 			err := ah.saveToken()
 			if err != nil {
-				log.Fatalf("Unable to save token: %s", err)
+				panic(fmt.Sprintf("Unable to save token: %s", err))
 			}
 
 			ah.adminHasAuthed()
