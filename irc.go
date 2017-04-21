@@ -119,7 +119,7 @@ func (c *Chat) activeInRoom(v *Viewer) {
 		v.Chatter.TimeInChannel += timeSince
 		v.Chatter.LastActive = newTime
 
-		log.Printf("Chat: ++Awarded++ %s : %s for total of %s", nick, timeSince, v.Chatter.TimeInChannel)
+		// log.Printf("Chat: ++Awarded++ %s : %s for total of %s", nick, timeSince, v.Chatter.TimeInChannel)
 	}
 }
 
