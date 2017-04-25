@@ -333,6 +333,8 @@ const (
 	TwitchMsgTimeoutSuccess      = "timeout_success"          // <user> has been timed out for <duration> seconds.
 	TwitchMsgUnbanSuccess        = "unban_success"            // <user> is no longer banned from this chat room.
 	TwitchMsgUnrecognizedCmd     = "unrecognized_cmd"         // Unrecognized command: <command>
+	TwitchMsgErrorRateLimit      = "msg_ratelimit"            // Your message was not sent because you are sending messages too quickly.
+	TwitchMsgErrorDuplicate      = "msg_duplicate"            // Your message was not sent because it is identical to the previous one you sent, less than 30 seconds ago.
 )
 
 // Twitch Tags

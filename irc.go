@@ -45,6 +45,8 @@ type Chat struct {
 
 	logger *chatLogInteral
 
+	sayMsgPipe chan string
+
 	viewers       viewerProvider
 	irc           *irc.Client
 	weakClientRef *Client
@@ -85,7 +87,48 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
 
+	chat.sayMsgPipe = make(chan string, 20)
+	go chat.ircOutMsgPump()
+
 	return chat, nil
+}
+
+func (c *Chat) ircOutMsgPump() {
+
+	maxLimitInPeriod := 20
+	limiter := time.Tick(time.Second * 30)
+	numMsgs := 0
+
+	for {
+		select {
+		case msg, ok := <-c.sayMsgPipe:
+			if !ok {
+				log.Println("IRC Out Msg Pump Closed")
+				return
+			}
+
+			err := c.irc.Write(msg)
+			if err != nil {
+				log.Printf("Write Raw Failed: %s\n %s", msg, err.Error())
+			}
+
+			numMsgs++
+
+			if numMsgs >= maxLimitInPeriod {
+				// Block on Limiter
+				log.Printf("-- IRC RATE LIMIT HIT --")
+				<-limiter
+				numMsgs = 0
+			}
+		case _, ok := <-limiter:
+			if !ok {
+				log.Println("IRC Out Msg Pump Limiter Closed")
+				return
+			}
+			numMsgs = 0
+		}
+	}
+
 }
 
 func (c *Chat) tickRoomActive() {
@@ -162,15 +205,12 @@ func (c *Chat) StartRunLoop() error {
 
 // WriteRawIrcMsg - Writes a raw IRC message
 func (c *Chat) WriteRawIrcMsg(msg string) {
-	if c.irc == nil {
-		log.Printf("Cannot Write to IRC as it's NIL: %s", msg)
-		return
-	}
+	c.sayMsgPipe <- msg
+}
 
-	err := c.irc.Write(msg)
-	if err != nil {
-		log.Printf("Write Raw Failed: %s\n %s", msg, err.Error())
-	}
+// WriteSayMsg - Writes a PRIVMSG the normal type of Irc chat msg
+func (c *Chat) WriteSayMsg(msg string) {
+	c.sayMsgPipe <- fmt.Sprintf("PRIVMSG #%s :%s", c.weakClientRef.RoomName, msg)
 }
 
 func (c *Chat) respondToWelcome(m *irc.Message) {
@@ -662,6 +702,12 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 
 		case TwitchUserNoticeReSub:
 			// TODO :: Add reaction hook
+			c.Log(LogCatSystem, m.Trailing())
+
+		case TwitchMsgErrorRateLimit:
+			c.Log(LogCatSystem, m.Trailing())
+
+		case TwitchMsgErrorDuplicate:
 			c.Log(LogCatSystem, m.Trailing())
 
 		/*

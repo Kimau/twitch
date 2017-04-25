@@ -33,9 +33,9 @@ type EmoteSetMap struct {
 
 // EmoteReplace - Characters to replace in a string
 type EmoteReplace struct {
-	ID    EmoteID
-	Start int
-	End   int
+	ID    EmoteID `json:"id"`
+	Start int     `json:"start"`
+	End   int     `json:"end"`
 }
 
 // EmoteReplaceListFromBack - Emote List for reverse sorting so stuff is in the order

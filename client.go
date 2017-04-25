@@ -95,7 +95,7 @@ type Client struct {
 }
 
 // CreateTwitchClient -
-func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin string) (*Client, error) {
+func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin string, forceAuth bool) (*Client, error) {
 	kb := Client{
 		domain:    servingFromDomain,
 		servePath: servingFromDomain[strings.Index(servingFromDomain, "/"):],
@@ -146,7 +146,9 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 	kb.Heart = &Heartbeat{client: &kb}
 	kb.Alerts = StartAlertPump(&kb)
 
-	kb.loadToken()
+	if !forceAuth {
+		kb.loadToken()
+	}
 
 	return &kb, nil
 }
@@ -288,4 +290,9 @@ func (ah *Client) startNewChat() {
 		log.Printf("Chat Shutdown %s", err.Error())
 		return
 	}
+}
+
+// SayMsg - Say IRC Message
+func (ah *Client) SayMsg(line string) {
+	ah.Chat.WriteSayMsg(line)
 }

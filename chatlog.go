@@ -75,21 +75,21 @@ func (lc LogCat) FriendlyName() string {
 
 // LogLineParsed - Useful for Parsing Log Lines
 type LogLineParsed struct {
-	StampSeconds int
-	Cat          LogCat
-	Body         string
+	StampSeconds int    `json:"time"`
+	Cat          LogCat `json:"cat"`
+	Body         string `json:"body"`
 
-	Msg *LogLineParsedMsg
+	Msg *LogLineParsedMsg `json:"msg"`
 }
 
 // LogLineParsedMsg - Extra Content for Msg Log Entries
 type LogLineParsedMsg struct {
-	UserID  ID
-	Nick    IrcNick
-	Bits    int
-	Badge   string
-	Content string
-	Emotes  EmoteReplaceListFromBack
+	UserID  ID                       `json:"userid"`
+	Nick    IrcNick                  `json:"nick"`
+	Bits    int                      `json:"bits"`
+	Badge   string                   `json:"badge"`
+	Content string                   `json:"content"`
+	Emotes  EmoteReplaceListFromBack `json:"emotes"`
 }
 
 type subToChatPump struct {
