@@ -87,7 +87,7 @@ type LogLineParsedMsg struct {
 	UserID  ID                       `json:"userid"`
 	Nick    IrcNick                  `json:"nick"`
 	Bits    int                      `json:"bits"`
-	Badge   string                   `json:"badge"`
+	Badge   string                   `json:"badge"` // https://badges.twitch.tv/v1/badges/global/display?language=en
 	Content string                   `json:"content"`
 	Emotes  EmoteReplaceListFromBack `json:"emotes"`
 }
