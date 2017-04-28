@@ -41,6 +41,11 @@ func (vm *ViewerMethod) GetRoomID() ID {
 	return vm.client.RoomID
 }
 
+// GetRoomName - Get Room Name
+func (vm *ViewerMethod) GetRoomName() IrcNick {
+	return vm.client.RoomName
+}
+
 // Set - Set New Viewer Value
 func (vm *ViewerMethod) Set(v Viewer) {
 	vm.lockmap()
@@ -59,9 +64,9 @@ func (vm *ViewerMethod) Set(v Viewer) {
 //SetFollower - Sets the new value in with lock
 func (vm *ViewerMethod) SetFollower(newVal ChannelFollow) {
 	v := vm.GetFromUser(*newVal.User)
-	v.lockme()
+	v.Lockme()
 	v.Follower = &newVal
-	v.unlockme()
+	v.Unlockme()
 
 	vm.lockmap()
 	vm.followerCache[newVal.User.ID] = ChannelRelationship(newVal).CreatedAt()
@@ -75,9 +80,9 @@ func (vm *ViewerMethod) ClearFollower(tid ID) {
 
 	v, ok := vm.viewers[tid]
 	if ok {
-		v.lockme()
+		v.Lockme()
 		v.Follower = nil
-		v.unlockme()
+		v.Unlockme()
 	}
 	delete(vm.followerCache, tid)
 }
@@ -103,8 +108,24 @@ func (vm *ViewerMethod) AllKeys() []ID {
 	return myKeys
 }
 
-// Get - Get Viewer by ID
-func (vm *ViewerMethod) Get(twitchID ID) *Viewer {
+// GetCopy - Get Copy of Viewer
+func (vm *ViewerMethod) GetCopy(twitchID ID) (Viewer, error) {
+	var err error
+	newV := Viewer{TwitchID: twitchID}
+
+	v := vm.GetPtr(twitchID)
+	if v != nil {
+		v.Lockme()
+		newV = *v
+		v.Unlockme()
+	} else {
+		err = fmt.Errorf("Unable to Find Viewer")
+	}
+	return newV, err
+}
+
+// GetPtr - Get Viewer by ID
+func (vm *ViewerMethod) GetPtr(twitchID ID) *Viewer {
 	vm.lockmap()
 	v, ok := vm.viewers[twitchID]
 	vm.unlockmap()
@@ -152,34 +173,6 @@ func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 	v.CreateChatter()
 
 	return v
-}
-
-// GetFromChatter - Get Viewer from Chatter
-func (vm *ViewerMethod) GetFromChatter(cu Chatter) *Viewer {
-	if cu.id != "" {
-		v := vm.Get(cu.id)
-		v.SetChatter(cu)
-		return v
-	} else if cu.Nick != "" {
-		v, err := vm.Find(cu.Nick)
-		if err != nil {
-			log.Printf("GetFromChatter - unable to get from nick [%s] \n%s", cu.Nick, err)
-			return nil
-		}
-		v.SetChatter(cu)
-		return v
-	} else if cu.DisplayName != "" {
-		v, err := vm.Find(IrcNick(cu.DisplayName))
-		if err != nil {
-			log.Printf("GetFromChatter - unable to get from display name [%s] \n%s", cu.DisplayName, err)
-			return nil
-		}
-		v.SetChatter(cu)
-		return v
-	}
-
-	fmt.Printf("GetFromChatter ERROR \n %#v", cu)
-	return nil
 }
 
 func (vm *ViewerMethod) findViewerByName(nick IrcNick) *Viewer {
@@ -266,9 +259,9 @@ func (vm *ViewerMethod) UpdateFollowers(fList []ChannelFollow) {
 	for _, f := range fList {
 		v := vm.GetFromUser(*f.User)
 
-		v.lockme()
+		v.Lockme()
 		v.Follower = &f
-		v.unlockme()
+		v.Unlockme()
 	}
 
 	vm.lockmap()

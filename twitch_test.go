@@ -1,10 +1,5 @@
 package twitch
 
-import (
-	"fmt"
-	"strings"
-)
-
 type DummyViewProvider struct {
 	Viewers map[ID]*Viewer
 }
@@ -23,8 +18,14 @@ func (dvp *DummyViewProvider) GetRoomID() ID {
 	return ID(0)
 }
 
-func (dvp *DummyViewProvider) GetNick() IrcNick { return "kimau" }
-func (dvp *DummyViewProvider) Get(id ID) *Viewer {
+func (dvp *DummyViewProvider) GetRoomName() IrcNick { return "kimau" }
+func (dvp *DummyViewProvider) GetNick() IrcNick     { return "kimbot" }
+
+func (dvp *DummyViewProvider) GetCopy(id ID) Viewer {
+	return *dvp.GetPtr(id)
+}
+
+func (dvp *DummyViewProvider) GetPtr(id ID) *Viewer {
 	v, ok := dvp.Viewers[id]
 	if !ok {
 		v = &Viewer{
@@ -39,6 +40,7 @@ func (dvp *DummyViewProvider) Get(id ID) *Viewer {
 
 	return v
 }
+
 func (dvp *DummyViewProvider) Find(nick IrcNick) (*Viewer, error) {
 	for _, v := range dvp.Viewers {
 		if v.User.Name == nick {
@@ -68,30 +70,9 @@ func (dvp *DummyViewProvider) UpdateViewers(nickList []IrcNick) []*Viewer {
 }
 
 func (dvp *DummyViewProvider) GetFromUser(u User) *Viewer {
-	v := dvp.Get(u.ID)
+	v := dvp.GetPtr(u.ID)
 	v.SetUser(u)
 	return v
-}
-
-// GetFromChatter - Get Viewer from Chatter
-func (dvp *DummyViewProvider) GetFromChatter(cu Chatter) *Viewer {
-	if cu.id != "" {
-		v := dvp.Get(cu.id)
-		v.SetChatter(cu)
-		return v
-	} else if cu.Nick != "" {
-		v, _ := dvp.Find(cu.Nick)
-		v.SetChatter(cu)
-		return v
-	} else if cu.DisplayName != "" {
-		v, _ := dvp.Find(IrcNick(cu.DisplayName))
-		v.SetChatter(cu)
-		return v
-	}
-
-	fmt.Printf("GetFromChatter ERROR \n %s",
-		strings.Replace(fmt.Sprintf("%#v", cu), ",", ",\n", -1))
-	return nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////

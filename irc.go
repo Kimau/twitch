@@ -3,11 +3,12 @@ package twitch
 import (
 	"fmt"
 	"log"
-	"net"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"io"
 
 	"github.com/go-irc/irc"
 	"golang.org/x/time/rate"
@@ -65,7 +66,7 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 		return nil, fmt.Errorf("Associated user has no valid Auth")
 	}
 
-	roomViewer := vp.Get(vp.GetRoomID())
+	roomNick := vp.GetRoomName()
 
 	chat := &Chat{
 		Server: serverAddr,
@@ -78,17 +79,14 @@ func createIrcClient(auth ircAuthProvider, vp viewerProvider, serverAddr string)
 		viewers: vp,
 		InRoom:  make(map[IrcNick]*Viewer),
 
-		logger: startChatLogPump(roomViewer.GetNick()),
+		logger: startChatLogPump(roomNick),
 	}
 
 	chat.Logf(LogCatSilent, "+------------ New Log [%s] ------------+ %s",
-		roomViewer.GetNick(), time.Now().Format(time.RFC822Z))
+		roomNick, time.Now().Format(time.RFC822Z))
 
 	chat.config.Handler = chat
 	chat.limiter = rate.NewLimiter(rate.Every(limitIrcMessageTime), limitIrcMessageNum)
-
-	chat.sayMsgPipe = make(chan string, 20)
-	go chat.ircOutMsgPump()
 
 	return chat, nil
 }
@@ -147,8 +145,8 @@ func (c *Chat) activeInRoom(v *Viewer) {
 	newTime := time.Now()
 	v.CreateChatter()
 
-	v.lockme()
-	defer v.unlockme()
+	v.Lockme()
+	defer v.Unlockme()
 
 	nick := v.GetNick()
 	_, ok := c.InRoom[nick]
@@ -167,13 +165,12 @@ func (c *Chat) activeInRoom(v *Viewer) {
 }
 
 // StartRunLoop - Start Run Loop
-func (c *Chat) StartRunLoop() error {
-	conn, err := net.Dial("tcp", c.Server)
-	if err != nil {
-		return err
-	}
+func (c *Chat) StartRunLoop(ircConn io.ReadWriter) error {
 
-	c.irc = irc.NewClient(conn, c.config)
+	c.irc = irc.NewClient(ircConn, c.config)
+
+	c.sayMsgPipe = make(chan string, 20)
+	go c.ircOutMsgPump()
 
 	if IrcVerboseMode {
 		// In Verbose mode log all messages
@@ -195,7 +192,7 @@ func (c *Chat) StartRunLoop() error {
 
 	log.Println("IRC Connected")
 
-	err = c.irc.Run()
+	err := c.irc.Run()
 	if err != nil {
 		c.irc = nil
 	}
@@ -210,14 +207,14 @@ func (c *Chat) WriteRawIrcMsg(msg string) {
 
 // WriteSayMsg - Writes a PRIVMSG the normal type of Irc chat msg
 func (c *Chat) WriteSayMsg(msg string) {
-	c.sayMsgPipe <- fmt.Sprintf("PRIVMSG #%s :%s", c.weakClientRef.RoomName, msg)
+	c.sayMsgPipe <- fmt.Sprintf("PRIVMSG #%s :%s", c.viewers.GetRoomName(), msg)
 }
 
 func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/membership")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/tags")
 	c.WriteRawIrcMsg("CAP REQ :twitch.tv/commands")
-	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.weakClientRef.RoomName))
+	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.viewers.GetRoomName()))
 }
 
 func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
@@ -230,8 +227,7 @@ func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
 }
 
 func (c *Chat) hostUpdate(src IrcNick, target IrcNick, numViewers int) error {
-	roomViewer := c.viewers.Get(c.viewers.GetRoomID())
-	roomNick := roomViewer.GetNick()
+	roomNick := c.viewers.GetRoomName()
 
 	if src == roomNick {
 		// You are now hosting
@@ -497,9 +493,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			panic(err)
 		}
 		v.CreateChatter()
-		v.lockme()
+		v.Lockme()
 		v.Chatter.updateChatterFromTags(m)
-		v.unlockme()
+		v.Unlockme()
 
 		c.Logf(LogCatSystem, "%s", m.Tags[TwitchTagSystemMsg])
 
@@ -516,9 +512,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 		v.CreateChatter()
-		v.lockme()
+		v.Lockme()
 		v.Chatter.updateChatterFromTags(m)
-		v.unlockme()
+		v.Unlockme()
 
 		c.activeInRoom(v)
 		c.Logf(LogCatSystem, "User State updated from %s in %s", nick, m.Trailing())
@@ -579,9 +575,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 		v.CreateChatter()
-		v.lockme()
+		v.Lockme()
 		v.Chatter.updateChatterFromTags(m)
-		v.unlockme()
+		v.Unlockme()
 		c.activeInRoom(v)
 
 		// Priority Badge

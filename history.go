@@ -42,11 +42,6 @@ func (hvd *HistoricViewerData) Get(id ID) *Viewer {
 	return nil
 }
 
-// GetFromChatter  - Get Viewer from Chatter ID
-func (hvd *HistoricViewerData) GetFromChatter(cu Chatter) *Viewer {
-	return hvd.Get(cu.id)
-}
-
 // GetFromUser - Get Viewer from User ID (no update)
 func (hvd *HistoricViewerData) GetFromUser(u User) *Viewer {
 	return hvd.Get(u.ID)

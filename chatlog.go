@@ -321,7 +321,7 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	}
 
 	// Get Viewer Data
-	v := vp.Get(llp.Msg.UserID)
+	v := vp.GetPtr(llp.Msg.UserID)
 	if v == nil {
 		return fmt.Sprintf(ChatLogFormatMsgHTML,
 			catStr,
@@ -332,6 +332,8 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 			msgContent)
 	}
 
+	// View Lock
+	v.Lockme()
 	if v.Follower != nil {
 		catStr += " follow"
 	}
@@ -340,6 +342,8 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	if v.Chatter != nil {
 		chatColor = v.Chatter.Color
 	}
+	v.Unlockme()
+	//
 
 	return fmt.Sprintf(ChatLogFormatMsgExtraHTML,
 		catStr,

@@ -25,7 +25,8 @@ type Viewer struct {
 	client *Client
 }
 
-func (vw *Viewer) lockme() {
+// Lockme - Lock The Viewer
+func (vw *Viewer) Lockme() {
 	vw.mylock.Lock()
 	if debugViewerLock {
 		fmt.Println("- LOCK -", vw.TwitchID)
@@ -33,7 +34,8 @@ func (vw *Viewer) lockme() {
 	}
 }
 
-func (vw *Viewer) unlockme() {
+// Unlockme - Unlock the Viewer
+func (vw *Viewer) Unlockme() {
 	vw.mylock.Unlock()
 	if debugViewerLock {
 		fmt.Println("- UNLOCK -", vw.TwitchID)
@@ -43,35 +45,35 @@ func (vw *Viewer) unlockme() {
 
 //SetUser - Sets the new value in with lock
 func (vw *Viewer) SetUser(newVal User) {
-	vw.lockme()
+	vw.Lockme()
 	vw.User = &newVal
-	vw.unlockme()
+	vw.Unlockme()
 }
 
 //SetAuth - Sets the new value in with lock
 func (vw *Viewer) SetAuth(newVal UserAuth) {
-	vw.lockme()
+	vw.Lockme()
 	vw.Auth = &newVal
-	vw.unlockme()
+	vw.Unlockme()
 }
 
 //ClearAuth - Clear the Value with lock
 func (vw *Viewer) ClearAuth() {
-	vw.lockme()
+	vw.Lockme()
 	vw.Auth = nil
-	vw.unlockme()
+	vw.Unlockme()
 }
 
 //SetChatter - Sets the new value in with lock
 func (vw *Viewer) SetChatter(newVal Chatter) {
-	vw.lockme()
+	vw.Lockme()
 	vw.Chatter = &newVal
-	vw.unlockme()
+	vw.Unlockme()
 }
 
 //CreateChatter - Creates Blank Chatter
 func (vw *Viewer) CreateChatter() {
-	vw.lockme()
+	vw.Lockme()
 	if vw.Chatter == nil {
 		log.Printf("Chat: ++Created++ %s", vw.User.Name)
 		vw.Chatter = &Chatter{
@@ -88,7 +90,7 @@ func (vw *Viewer) CreateChatter() {
 			LastActive:    time.Now(),
 		}
 	}
-	vw.unlockme()
+	vw.Unlockme()
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct

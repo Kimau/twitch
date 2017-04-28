@@ -6,6 +6,10 @@ import (
 
 	"os"
 
+	"io"
+
+	"bytes"
+
 	"github.com/go-irc/irc"
 )
 
@@ -92,10 +96,12 @@ func (da *DummyAuth) GetIrcAuth() (hasauth bool, name string, pass string) {
 }
 
 type DummyWriteRead struct {
+	Input  io.Reader
+	Output io.Writer
 }
 
-func (dr *DummyWriteRead) Read(p []byte) (n int, err error)  { return len(p), nil }
-func (dr *DummyWriteRead) Write(p []byte) (n int, err error) { return len(p), nil }
+func (dr *DummyWriteRead) Read(p []byte) (n int, err error)  { return dr.Input.Read(p) }
+func (dr *DummyWriteRead) Write(p []byte) (n int, err error) { return dr.Output.Write(p) }
 
 type DummyHandler struct {
 }
@@ -116,7 +122,12 @@ func TestIrcMessage(t *testing.T) {
 		t.FailNow()
 	}
 
-	ircClient := irc.NewClient(&DummyWriteRead{}, chat.config)
+	testBuffer := bytes.NewBufferString("")
+
+	chat.StartRunLoop(&DummyWriteRead{
+		Input:  testBuffer,
+		Output: os.Stdout,
+	})
 
 	// Last M
 	lastM := msgList[0]
@@ -128,13 +139,10 @@ func TestIrcMessage(t *testing.T) {
 
 	for _, v := range msgList {
 		lastM = v
-		m, err := irc.ParseMessage(v)
+		_, err := testBuffer.WriteString(v)
 		if err != nil {
-			t.Logf("FAILED TO PROCESS\n%s\n%s", m, err)
-			t.Fail()
+			t.Logf("Write Msg Error %s", err.Error())
 		}
-
-		chat.Handle(ircClient, m)
 	}
 	lastM = ""
 

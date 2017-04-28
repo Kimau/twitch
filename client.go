@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -187,7 +188,7 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	tid := ID(cList[0])
 
 	// Try Find User
-	vwr := ah.Viewers.Get(tid)
+	vwr, _ := ah.Viewers.GetCopy(tid)
 
 	// User isn't Auth start login
 	if vwr.Auth == nil || (vwr.Auth.checkCookie(c) == false) {
@@ -243,7 +244,7 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 
 func (ah *Client) adminHasAuthed() {
 	ah.AdminID = ah.AdminAuth.Token.UserID
-	ah.Viewers.Get(ah.AdminID) // Load up in Background
+	ah.Viewers.GetPtr(ah.AdminID) // Load up in Background
 
 	// Get Room we are Watching
 	roomViewer, err := ah.Viewers.Find(ah.RoomName)
@@ -285,7 +286,14 @@ func (ah *Client) startNewChat() {
 	ah.Chat = c
 	ah.Chat.weakClientRef = ah
 
-	err = ah.Chat.StartRunLoop()
+	// Make Connection
+	conn, err := net.Dial("tcp", c.Server)
+	if err != nil {
+		log.Printf("Chat Shutdown %s", err.Error())
+		return
+	}
+
+	err = ah.Chat.StartRunLoop(conn)
 	if err != nil {
 		log.Printf("Chat Shutdown %s", err.Error())
 		return
