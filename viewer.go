@@ -25,6 +25,42 @@ type Viewer struct {
 	client *Client
 }
 
+// CopyTo - Deep copies in threadsafe fashion
+func (vw *Viewer) CopyTo(copyV *Viewer) {
+	vw.Lockme()
+	defer vw.Unlockme()
+
+	copyV.TwitchID = vw.TwitchID
+
+	if vw.User != nil {
+		u := *vw.User
+		copyV.User = &u
+	} else {
+		copyV.User = nil
+	}
+
+	if vw.Auth != nil {
+		a := *vw.Auth
+		copyV.Auth = &a
+	} else {
+		copyV.Auth = nil
+	}
+
+	if vw.Chatter != nil {
+		c := *vw.Chatter
+		copyV.Chatter = &c
+	} else {
+		copyV.Chatter = nil
+	}
+
+	if vw.Follower != nil {
+		f := *vw.Follower
+		copyV.Follower = &f
+	} else {
+		copyV.Follower = nil
+	}
+}
+
 // Lockme - Lock The Viewer
 func (vw *Viewer) Lockme() {
 	vw.mylock.Lock()

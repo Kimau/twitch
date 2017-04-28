@@ -17,10 +17,14 @@ type HistoricChatLog struct {
 	LogLinesByDay map[time.Time][]LogLineParsed
 }
 
-// GetRoomID - Return Room ID
-func (hvd *HistoricViewerData) GetRoomID() ID {
-	return hvd.RoomID
-}
+// GetRoomID - Room Twitch ID
+func (hvd *HistoricViewerData) GetRoomID() ID { return hvd.RoomID }
+
+// GetRoomName - Room Twitch Nick
+func (hvd *HistoricViewerData) GetRoomName() IrcNick { return hvd.Name }
+
+// GetNick - Get Nick of Auth User
+func (hvd *HistoricViewerData) GetNick() IrcNick { return hvd.Name }
 
 // AllKeys - Get All Viewer IDs slower than a direct range over
 func (hvd *HistoricViewerData) AllKeys() []ID {
@@ -33,8 +37,8 @@ func (hvd *HistoricViewerData) AllKeys() []ID {
 	return myKeys
 }
 
-// Get - Get Viewer by ID
-func (hvd *HistoricViewerData) Get(id ID) *Viewer {
+// GetPtr - Get Viewer by ID
+func (hvd *HistoricViewerData) GetPtr(id ID) *Viewer {
 	v, ok := hvd.ViewerData[id]
 	if ok {
 		return &v
@@ -42,9 +46,22 @@ func (hvd *HistoricViewerData) Get(id ID) *Viewer {
 	return nil
 }
 
+// GetCopy - Get Copy of Viewer
+func (hvd *HistoricViewerData) GetCopy(twitchID ID) (Viewer, error) {
+	var v Viewer
+	src := hvd.GetPtr(twitchID)
+	if src != nil {
+		src.CopyTo(&v)
+		return v, nil
+	}
+
+	err := fmt.Errorf("Unable to Find Viewer")
+	return v, err
+}
+
 // GetFromUser - Get Viewer from User ID (no update)
 func (hvd *HistoricViewerData) GetFromUser(u User) *Viewer {
-	return hvd.Get(u.ID)
+	return hvd.GetPtr(u.ID)
 }
 
 // Find - Find viewer by Nick

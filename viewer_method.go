@@ -110,18 +110,15 @@ func (vm *ViewerMethod) AllKeys() []ID {
 
 // GetCopy - Get Copy of Viewer
 func (vm *ViewerMethod) GetCopy(twitchID ID) (Viewer, error) {
-	var err error
-	newV := Viewer{TwitchID: twitchID}
-
-	v := vm.GetPtr(twitchID)
-	if v != nil {
-		v.Lockme()
-		newV = *v
-		v.Unlockme()
-	} else {
-		err = fmt.Errorf("Unable to Find Viewer")
+	var v Viewer
+	src := vm.GetPtr(twitchID)
+	if src != nil {
+		src.CopyTo(&v)
+		return v, nil
 	}
-	return newV, err
+
+	err := fmt.Errorf("Unable to Find Viewer")
+	return v, err
 }
 
 // GetPtr - Get Viewer by ID

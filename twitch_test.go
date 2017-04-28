@@ -1,5 +1,7 @@
 package twitch
 
+import "fmt"
+
 type DummyViewProvider struct {
 	Viewers map[ID]*Viewer
 }
@@ -14,15 +16,20 @@ func (dvp *DummyViewProvider) AllKeys() []ID {
 	return myKeys
 }
 
-func (dvp *DummyViewProvider) GetRoomID() ID {
-	return ID(0)
-}
-
+func (dvp *DummyViewProvider) GetRoomID() ID        { return ID(0) }
 func (dvp *DummyViewProvider) GetRoomName() IrcNick { return "kimau" }
 func (dvp *DummyViewProvider) GetNick() IrcNick     { return "kimbot" }
 
-func (dvp *DummyViewProvider) GetCopy(id ID) Viewer {
-	return *dvp.GetPtr(id)
+func (dvp *DummyViewProvider) GetCopy(twitchID ID) (Viewer, error) {
+	var v Viewer
+	src := dvp.GetPtr(twitchID)
+	if src != nil {
+		src.CopyTo(&v)
+		return v, nil
+	}
+
+	err := fmt.Errorf("Unable to Find Viewer")
+	return v, err
 }
 
 func (dvp *DummyViewProvider) GetPtr(id ID) *Viewer {
