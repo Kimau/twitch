@@ -10,6 +10,12 @@ import (
 	"github.com/go-irc/irc"
 )
 
+// Badge -
+type Badge struct {
+	ID      string `json:"id"`
+	Version string `json:"version"`
+}
+
 // Chatter - The IRC Chatter Data
 type Chatter struct {
 	Nick        IrcNick    `json:"nick"`

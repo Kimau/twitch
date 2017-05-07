@@ -52,6 +52,9 @@ const (
 	scopeUserFollowsEdit          = "user_follows_edit"          // "user_follows_edit"          - Manage a user’s followed channels.
 	scopeUserRead                 = "user_read"                  // "user_read"                  - Read nonpublic user information, like email address.
 	scopeUserSubscriptions        = "user_subscriptions"         // "user_subscriptions"         - Read a user’s subscriptions.
+	scopeCollectionsEdit          = "collections_edit"           // "collections_edit"
+	scopeCommunitiesEdit          = "communities_edit"           // "communities_edit"
+	scopeCommunitiesModerate      = "communities_moderate"       // "communities_moderate"
 )
 
 // IDFromInt - Convert ID from int to string ID

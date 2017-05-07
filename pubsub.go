@@ -1,169 +1,153 @@
 package twitch
 
-/*
 import (
-	"bufio"
 	"fmt"
 	"log"
+	"regexp"
+	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"encoding/json"
 )
 
 const (
-	psWebSockAddr = "wss://PubSubConn-edge.twitch.tv"
+	psWebSockAddr = "wss://pubsub-edge.twitch.tv"
 
-	psPingType  = "PING"
-	psPongType  = "PONG"
-	psReconnect = "RECONNECT"
+	psPingType  = `{"type":"PING"}`
+	psPongType  = `{"type":"PONG"}`
+	psReconnect = `{"type":"RECONNECT"}`
 
-	psChanBits       PubSubSubject = "channel-bits-events-v1"      // append channel id
-	psChanSubs       PubSubSubject = "channel-subscribe-events-v1" // append channel id
-	psVideoPlayback  PubSubSubject = "video-playback"              // append channel id
-	psChatModActions PubSubSubject = "chat_moderator_actions"      // append channel id
-	psUserWhispers   PubSubSubject = "whispers"                    // append user id
+	psChanBits       = "channel-bits-events-v1"      // append channel id
+	psChanSubs       = "channel-subscribe-events-v1" // append channel id
+	psVideoPlayback  = "video-playback"              // append channel id
+	psChatModActions = "chat_moderator_actions"      // append channel id
+	psUserWhispers   = "whispers"                    // append user id
 
 	psBitsMsg = "bits_event"
 )
 
+var (
+	regexPSTopic = regexp.MustCompile("([0-9a-zA-Z]+).([0-9a-zA-Z]+)")
+)
+
 //////////////////////////////////////////////////////////
 // Bit PubSubConn Data
-
-type psBitsBadgeEntitlement struct {
-	New      int `json:"new_version"`      // "new_version": 25000,
-	Previous int `json:"previous_version"` // "previous_version": 10000
-}
-
 type psBitsMsgData struct {
-	UserName      IrcNick                `json:"user_name"`       // "user_name": "dallasnchains",
-	ChannelName   IrcNick                `json:"channel_name"`    // "channel_name": "dallas",
-	UserID        ID                     `json:"user_id"`         // "user_id": "129454141",
-	ChannelID     ID                     `json:"channel_id"`      // "channel_id": "44322889",
-	Time          string                 `json:"time"`            // "time": "2017-02-09T13:23:58.168Z",
-	ChatMessage   string                 `json:"chat_message"`    // "chat_message": "cheer10000 New badge hype!",
-	BitsUsed      int                    `json:"bits_used"`       // "bits_used": 10000,
-	TotalBitsUsed int                    `json:"total_bits_used"` // "total_bits_used": 25000,
-	Context       string                 `json:"context"`         // "context": "cheer",
-	BadgeEntitled psBitsBadgeEntitlement `json:"badge_entitlement"`
+	UserName      IrcNick `json:"user_name"`       // "user_name": "dallasnchains",
+	ChannelName   IrcNick `json:"channel_name"`    // "channel_name": "dallas",
+	UserID        ID      `json:"user_id"`         // "user_id": "129454141",
+	ChannelID     ID      `json:"channel_id"`      // "channel_id": "44322889",
+	Time          string  `json:"time"`            // "time": "2017-02-09T13:23:58.168Z",
+	ChatMessage   string  `json:"chat_message"`    // "chat_message": "cheer10000 New badge hype!",
+	BitsUsed      int     `json:"bits_used"`       // "bits_used": 10000,
+	TotalBitsUsed int     `json:"total_bits_used"` // "total_bits_used": 25000,
+	Context       string  `json:"context"`         // "context": "cheer",
+	BadgeEntitled struct {
+		New      int `json:"new_version"`      // "new_version": 25000,
+		Previous int `json:"previous_version"` // "previous_version": 10000
+	} `json:"badge_entitlement"`
+}
+
+type psSubMsgData struct {
+	UserName    IrcNick `json:"user_name"`    // "user_name": "dallas",
+	DisplayName string  `json:"display_name"` // "display_name": "dallas",
+	ChannelName IrcNick `json:"channel_name"` // "channel_name": "twitch",
+	UserID      ID      `json:"user_id"`      // "user_id": "44322889",
+	ChannelID   ID      `json:"channel_id"`   // "channel_id": "12826",
+	Time        string  `json:"time"`         // "time": "2017-02-09T13:23:58.168Z",
+
+	SubPlan     string `json:"sub_plan"`      // "sub_plan": "Prime"/"1000"/"2000"/"3000",
+	SubPlanName string `json:"sub_plan_name"` // "sub_plan_name": "Mr_Woodchuck - Channel Subscription (mr_woodchuck)",
+	Months      int    `json:"months"`        // "months": 9,
+	Context     string `json:"context"`       // "context": "sub"/"resub",
+
+	SubMessage struct {
+		Message string                   `json:"message"` // "message": "A Twitch baby is born! KappaHD"
+		Emotes  EmoteReplaceListFromBack `json:"emotes"`  // Emote List
+	} `json:"sub_message"`
+}
+
+type psWhispMsgData struct {
+	Type string `json:"type"` // "type":"whisper_received",
+	Data struct {
+		ID int `json:"id"`
+	} `json:"data"`
+
+	ThreadID string `json:"thread_id"` //        "thread_id":"129454141_44322889",
+	Body     string `json:"body"`      //        "body":"hello",
+	SentTS   int    `json:"sent_ts"`   //        "sent_ts":1479160009,
+	FromID   int    `json:"from_id"`   //        "from_id":39141793,
+	Tags     struct {
+		Login       IrcNick                  `json:"login"`        // "login":"dallas",
+		DisplayName string                   `json:"display_name"` // "display_name":"dallas",
+		Emotes      EmoteReplaceListFromBack `json:"emotes"`       // Emote List
+		Color       string                   `json:"color"`        // "color":"#8A2BE2",
+		Badges      []Badge                  `json:"badges"`
+	} `json:"tags"`
+	Recipient struct {
+		ID          int     `json:"id"`           // "id":129454141,
+		Nick        IrcNick `json:"username"`     // "username":"dallasnchains",
+		DisplayName string  `json:"display_name"` //  "display_name":"dallasnchains",
+		Color       string  `json:"color"`
+		Badges      []Badge `json:"badges"`
+	} `json:"recipient"`
 }
 
 //////////////////////////////////////////////////////////
-// Subscribe PubSubConn Data
-/*
-struct psSubMsgData {
-
-}
-
-{
-   "type": "MESSAGE",
-   "data": {
-      "topic": "channel-subscribe-events-v1.44322889",
-      "message": {
-         "user_name": "dallas",
-         "display_name": "dallas",
-         "channel_name": "twitch",
-         "user_id": "44322889",
-         "channel_id": "12826",
-         "time": "2015-12-19T16:39:57-08:00",
-         "sub_plan": "Prime"/"1000"/"2000"/"3000",
-         "sub_plan_name": "Mr_Woodchuck - Channel Subscription (mr_woodchuck)",
-         "months": 9,
-         "context": "sub"/"resub",
-         "sub_message": {
-            "message": "A Twitch baby is born! KappaHD",
-            "emotes": [
-            {
-               "start": 23,
-               "end": 7,
-               "id": 2867
-            }]
-         }
-     }
-   }
-}
-
-//////////////////////////////////////////////////////////
-// Whisper PubSubConn Data
-{
-   "type":"MESSAGE",
-   "data":{
-      "topic":"whispers.44322889",
-      "message":{
-         "type":"whisper_received",
-         "data":{
-            "id":41
-         },
-         "thread_id":"129454141_44322889",
-         "body":"hello",
-         "sent_ts":1479160009,
-         "from_id":39141793,
-         "tags":{
-            "login":"dallas",
-            "display_name":"dallas",
-            "color":"#8A2BE2",
-            "emotes":[
-
-            ],
-            "badges":[
-               {
-                  "id":"staff",
-                  "version":"1"
-               }
-            ]
-         },
-         "recipient":{
-            "id":129454141,
-            "username":"dallasnchains",
-            "display_name":"dallasnchains",
-            "color":"",
-            "badges":[]
-         },
-         "nonce":"6GVBTfBXNj7d71BULYKjpiKapegDI1"
-      },
-      "data_object":{
-         "id":41,
-         "thread_id":"129454141_44322889",
-         "body":"hello",
-         "sent_ts":1479160009,
-         "from_id":44322889,
-         "tags":{
-            "login":"dallas",
-            "display_name":"dallas",
-            "color":"#8A2BE2",
-            "emotes":[],
-            "badges":[
-               {
-                  "id":"staff",
-                  "version":"1"
-               }
-            ]
-         },
-         "recipient":{
-            "id":129454141,
-            "username":"dallasnchains",
-            "display_name":"dallasnchains",
-            "color":"",
-            "badges":[]
-         },
-         "nonce":"6GVBTfBXNj7d71BULYKjpiKapegDI1"
-      }
-   }
-}
-*
-
-//////////////////////////////////////////////////////////
-
-// PubSubSubject - Type of Subject you can Sub to
-type PubSubSubject string
 
 // PubSubTopic - Requested Sub to Topic
 type PubSubTopic struct {
 	Target  ID
-	Subject PubSubSubject
+	Subject string
 }
 
 func (pss PubSubTopic) String() string {
 	return fmt.Sprintf("%s.%s", pss.Subject, pss.Target)
+}
+
+// UnmarshalJSON - JSON Helper
+func (pss *PubSubTopic) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+
+	subStr := regexPSTopic.FindStringSubmatch(s)
+	if len(subStr) != 2 {
+		return fmt.Errorf("Invalid length from: %s", s)
+	}
+	pss.Subject = subStr[0]
+	pss.Target = ID(subStr[1])
+	return nil
+}
+
+// MarshalJSON - JSON Helper
+func (pss PubSubTopic) MarshalJSON() ([]byte, error) {
+	pStr := fmt.Sprintf("%s.%s", pss.Subject, pss.Target)
+	return []byte(pStr), nil
+}
+
+// PubSubTopicList - List of Topics
+type PubSubTopicList []PubSubTopic
+
+func (psList PubSubTopicList) String() string {
+	topicListStr := ""
+	for _, t := range psList {
+		topicListStr += t.String() + ", "
+	}
+	topicListStr = strings.Trim(topicListStr, ", ")
+	return topicListStr
+}
+
+// PubSubMsg - PS Message Base
+type PubSubMsg struct {
+	Type  string `json:"type"`
+	Nonce string `json:"nonce"`
+	Error string `json:"error,omitempty"`
+	Data  struct {
+		Topic   PubSubTopic `json:"topic"`
+		DataStr string      `json:"message"`
+	} `json:"data,omitempty"`
 }
 
 // PubSubConn - Subsciption to Published Topic
@@ -173,16 +157,15 @@ type PubSubConn struct {
 
 	activeTopics []PubSubTopic
 
-	pingTicket  *time.Timer
+	pingTicker  *time.Ticker
 	pongTimeOut *time.Timer
 
-	isConnected   bool
-	socket        *websocket.Conn
+	ws            *WebsocketConn
 	weakClientRef *Client
 }
 
 // CreatePubSub - Create Subsciption to Published Topics
-func CreatePubSub(ah *Client, topics []PubSubTopic) (*PubSubConn, error) {
+func CreatePubSub(ah *Client, topics PubSubTopicList) (*PubSubConn, error) {
 
 	ps := PubSubConn{
 		NewSub: make(chan PubSubTopic),
@@ -192,98 +175,152 @@ func CreatePubSub(ah *Client, topics []PubSubTopic) (*PubSubConn, error) {
 		weakClientRef: ah,
 	}
 
-	go ps.runningLoop()
-
 	return &ps, nil
 }
 
+func (ps *PubSubConn) closePubSub(pubString string) {
+	ps.ws.ErrorClose(pubString, fmt.Errorf(pubString))
+	ps.ws = nil
+}
+
 func (ps *PubSubConn) runningLoop() {
+	var err error
+	wshelper := CreateWebsocketHelper(nil)
 
 	for {
 		// Connect to Twitch
-		err := ps.reconnect()
+		ps.ws, err = wshelper.ClientDial(psWebSockAddr)
 		if err != nil {
-			log.Printf("")
+			log.Printf("PUBSUB: %s", err.Error())
+			continue
 		}
 
-		// Setup Input Scanner
-		scanLineChan := make(chan string, 10)
-		go func() {
-			scanner := bufio.NewScanner(ps.socket)
+		// Setup
+		ps.PingPong()
+		err = ps.sendListen(ps.activeTopics)
+		if err != nil {
+			ps.closePubSub(err.Error())
+		}
 
-			for ps.isConnected && scanner.Scan() {
-				scanLineChan <- scanner.Text()
-			}
-
-			close(scanLineChan)
-		}()
+		ps.pingTicker = time.NewTicker(time.Minute * 4)
 
 		// Handle Inputs
-		for ps.isConnected {
+		for ps.ws != nil {
 			select {
 			// Socket Activity
-			case l, ok := <-scanLineChan:
+			case l, ok := <-ps.ws.CmdChan:
 				if !ok {
-					ps.isConnected = false
+					ps.closePubSub("PUBSUB: Cmd Channel Closed")
 					continue
 				}
 
-				log.Println("PUBSUB [DEBUG]: %s", l)
+				psm := PubSubMsg{}
+				err = json.Unmarshal([]byte(l), &psm)
+				switch psm.Type {
+				case "PONG":
+					ps.pongTimeOut.Stop()
+
+				case "RESPONSE":
+					if len(psm.Error) > 3 {
+						log.Printf("PUBSUB RESPONSE: %s", psm.Error)
+					}
+
+				case "MESSAGE":
+					log.Printf("PUBSUB MESSAGE: %s\n---\n%s", l, psm.Data)
+
+				default:
+					log.Printf("PUBSUB [DEBUG]: %s", l)
+				}
+
+				// Ping Ticker
+			case _, ok := <-ps.pingTicker.C:
+				if ok {
+					ps.PingPong()
+				}
+
+				// Pong Timeout
+			case _, ok := <-ps.pongTimeOut.C:
+				if ok {
+					log.Printf("PUBSUB - PONG TIMEOUT")
+				}
 
 			// New Subs
 			case ns, ok := <-ps.NewSub:
 				if !ok {
-					ps.isConnected = false
-					log.Println("PUBSUB: Closed Running Loop - New Sub Channel Closed")
+					ps.closePubSub("PUBSUB: Closed Running Loop - New Sub Channel Closed")
 					return
 				}
+
+				for _, oldSub := range ps.activeTopics {
+					if oldSub == ns {
+						continue
+					}
+				}
+
+				err = ps.sendListen(PubSubTopicList{ns})
+				if err != nil {
+					ps.closePubSub(err.Error())
+				}
+				ps.activeTopics = append(ps.activeTopics, ns)
 
 			// Kill Subs
 			case ks, ok := <-ps.DelSub:
 				if !ok {
-					ps.isConnected = false
-					log.Println("PUBSUB: Closed Running Loop - Del Sub Channel Closed")
+					ps.closePubSub("PUBSUB: Closed Running Loop - Del Sub Channel Closed")
 					return
 				}
+
+				filterList := []PubSubTopic{}
+				for _, oldSub := range ps.activeTopics {
+					if oldSub == ks {
+						err = ps.sendUnlisten(PubSubTopicList{ks})
+						if err != nil {
+							ps.closePubSub(err.Error())
+						}
+
+					} else {
+						filterList = append(filterList, oldSub)
+					}
+				}
+				ps.activeTopics = filterList
 			}
 		}
 
 	}
 }
 
-func (ps *PubSubConn) sendListen() error {
-	websocket.JSON
+func (ps *PubSubConn) sendListen(topicList PubSubTopicList) error {
+	nonce := GenerateRandomString(16)
+	authToken := ps.weakClientRef.GetAuth()
+
+	// LISTEN
+	listenJSON := fmt.Sprintf(`{ "type": "LISTEN", "nonce": "%s", 
+		"data": { "topics": ["%s"], "auth_token": "%s" }}`,
+		nonce, topicList, authToken)
+
+	// log.Println("PUBSUB: " + listenJSON)
+
+	return ps.ws.WriteString(listenJSON)
 }
 
-func (ps *PubSubConn) sendUnlisten() error {
+func (ps *PubSubConn) sendUnlisten(topicList PubSubTopicList) error {
+	nonce := GenerateRandomString(16)
+	authToken := ps.weakClientRef.GetAuth()
 
-}
+	// LISTEN
+	unlistenJSON := fmt.Sprintf(`{ "type": "UNLISTEN", "nonce": "%s", 
+		"data": { "topics": ["%s"], "auth_token": "%s" }}`,
+		nonce, topicList, authToken)
 
-func (ps *PubSubConn) reconnect() error {
-	if ps.socket != nil {
-		ps.socket.Close()
-	}
-
-	ws, err := websocket.Dial(psWebSockAddr, "", fmt.Sprintf("http://%s", ps.weakClientRef.domain))
-	if err != nil {
-		return err
-	}
-	ps.socket = ws
-
-	// Setup Ping Ticker
-	ps.PingPong()
-
-	ps.isConnected = true
-	return nil
+	return ps.ws.WriteString(unlistenJSON)
 }
 
 // PingPong - You must ping once every 5min and if no response in 10 seconds you must reconnect
 func (ps *PubSubConn) PingPong() {
 
-	n, err := fmt.Fprint(ws, psPingType)
+	err := ps.ws.WriteString(psPingType)
 	if err != nil {
-		log.Printf("PubSubConn: Ping failed to write")
-		ps.Reconnect()
+		ps.closePubSub("PubSubConn: Ping failed to write")
 		return
 	}
 
@@ -293,4 +330,3 @@ func (ps *PubSubConn) PingPong() {
 		ps.pongTimeOut.Reset(time.Second * 10)
 	}
 }
-*/

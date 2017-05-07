@@ -93,6 +93,7 @@ type Client struct {
 	Stream  *StreamsMethod
 	Heart   *Heartbeat
 	Alerts  *AlertPump
+	PubSub  *PubSubConn
 }
 
 // CreateTwitchClient -
@@ -146,6 +147,10 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 	kb.Stream = &StreamsMethod{client: &kb, au: kb.AdminAuth}
 	kb.Heart = &Heartbeat{client: &kb}
 	kb.Alerts = StartAlertPump(&kb)
+
+	if err != nil {
+		panic(err)
+	}
 
 	if !forceAuth {
 		kb.loadToken()
@@ -268,6 +273,17 @@ func (ah *Client) adminHasAuthed() {
 	}
 
 	go ah.Heart.StartBeat()
+
+	// PubSub
+	ah.PubSub, err = CreatePubSub(ah, PubSubTopicList{
+		//{Subject: psChanBits, Target: ah.RoomID},
+		//{Subject: psChanSubs, Target: ah.RoomID},
+		//{Subject: psVideoPlayback, Target: ah.RoomID},
+		//{Subject: psChatModActions, Target: ah.RoomID},
+		{Subject: psUserWhispers, Target: ah.AdminID},
+	})
+
+	go ah.PubSub.runningLoop()
 
 	// HACK :: Filthy Hack
 	// Allow a brief startup gap for responses ect...
