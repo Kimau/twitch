@@ -16,7 +16,7 @@ var (
 )
 
 // WebsocketHandler - Handler will be called when a new socket connection is Created
-type WebsocketHandler func(WebsocketConn)
+type WebsocketHandler func(*WebsocketConn)
 
 // WebsocketConn - Useful Wrapper for a single Connection. Note each connection will be on it's own go routine
 type WebsocketConn struct {
@@ -36,6 +36,7 @@ func CreateWebsocketHelper(newHandler WebsocketHandler) *WebsocketHelper {
 	}
 }
 
+// ServeHTTP - Server Approach
 func (wh *WebsocketHelper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var err error
 	wc := WebsocketConn{}
@@ -52,7 +53,24 @@ func (wh *WebsocketHelper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	wc.CmdChan = make(chan string)
 	go wc.pumpCommands()
 
-	wh.handler(wc)
+	wh.handler(&wc)
+}
+
+// ClientDial - Used to Dial as a Client
+func (wh *WebsocketHelper) ClientDial(addr string) (*WebsocketConn, error) {
+	var err error
+	wc := WebsocketConn{}
+
+	wc.ws, _, err = websocket.DefaultDialer.Dial(addr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create Reader for Channel
+	wc.CmdChan = make(chan string)
+	go wc.pumpCommands()
+
+	return &wc, nil
 }
 
 func (wc *WebsocketConn) pumpCommands() {
