@@ -22,8 +22,8 @@ func (nick IrcNick) IsValid() bool {
 // Currency use to track viewer Value
 type Currency int
 
-// AlertName - Type of Alert
-type AlertName int
+// AlertType - Type of Alert
+type AlertType int
 
 // WebClient - Provides basic Request Poster
 type WebClient interface {

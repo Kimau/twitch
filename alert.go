@@ -8,18 +8,21 @@ import (
 
 // Alert - The main method to find out when stuff has happened
 type Alert struct {
-	Name   AlertName   `json:"name"`
+	Type   AlertType   `json:"type"`
 	Source IrcNick     `json:"source"`
 	Data   interface{} `json:"data"`
 }
 
 func (a Alert) String() string {
+	if a.Data == nil {
+		return fmt.Sprintf("%s: %s - NIL", a.NameString(), a.Source)
+	}
 	return fmt.Sprintf("%s: %s - %s", a.NameString(), a.Source, a.Data)
 }
 
 // NameString - Gives Label for Type
 func (a Alert) NameString() string {
-	switch a.Name {
+	switch a.Type {
 	case AlertNone:
 		return "None"
 	case AlertHost:
@@ -133,9 +136,9 @@ func (pump *AlertPump) Unsub(deadChannel chan Alert) {
 }
 
 // Post - Post Alert to Listeners
-func (pump *AlertPump) Post(source IrcNick, name AlertName, extraData interface{}) {
+func (pump *AlertPump) Post(source IrcNick, name AlertType, extraData interface{}) {
 	pump.newAlerts <- Alert{
-		Name:   name,
+		Type:   name,
 		Source: source,
 		Data:   extraData,
 	}
@@ -154,11 +157,11 @@ func (pump *AlertPump) postInternal(newAlert Alert) error {
 	defer pump.recentLock.Unlock()
 
 	// Exception for None just forward it
-	if newAlert.Name != AlertNone {
+	if newAlert.Type != AlertNone {
 
 		// Sanity Check to avoid doubling of Alerts
 		for _, a := range pump.recentAlerts {
-			if (a.Name == newAlert.Name) && (a.Source == newAlert.Source) {
+			if (a.Type == newAlert.Type) && (a.Source == newAlert.Source) {
 				return fmt.Errorf("Doubling of Prev Alert: %s", a)
 			}
 		}

@@ -217,7 +217,7 @@ func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.viewers.GetRoomName()))
 }
 
-func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extraData interface{}) error {
+func (c *Chat) forwardAlert(aType AlertType, src IrcNick, extraData interface{}) error {
 	if c.weakClientRef == nil {
 		return fmt.Errorf("Weak Client Ref Missing")
 	}
@@ -482,22 +482,54 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.Logf(LogCatSystem, "%s updated: %s", chatChanName, c.mode)
 
 	case TwitchCmdUserNotice:
-		nick := IrcNick(m.Name)
-		if nick.IsValid() == false {
-			log.Printf("User Notice: Ignoring %s", nick)
-			return
-		}
+		userID := ID(m.Tags[TwitchTagUserID])
 
-		v, err := c.viewers.Find(nick)
-		if err != nil {
-			panic(err)
+		v := c.viewers.GetPtr(userID)
+		if v == nil {
+			panic("USER NOTICE CANNOT GET " + m.Tags[TwitchTagUserID])
 		}
 		v.CreateChatter()
 		v.Lockme()
 		v.Chatter.updateChatterFromTags(m)
 		v.Unlockme()
 
-		c.Logf(LogCatSystem, "%s", m.Tags[TwitchTagSystemMsg])
+		// Handle Emotes
+		var err error
+		var emoList EmoteReplaceListFromBack
+		emoteList, ok := m.Tags[TwitchTagMsgEmotes]
+		if ok {
+			emoList, err = emoteTagToList(emoteList)
+			if err != nil {
+				log.Printf("Unable to parse Emote Tag [%s]\n%s", emoteList, err)
+				emoList = []EmoteReplace{}
+			}
+		}
+
+		// Make Msg
+		llp := MakeLogLineMsg(LogCatMsg,
+			LogLineParsedMsg{
+				UserID:  v.TwitchID,
+				Nick:    v.Chatter.Nick,
+				Bits:    0,
+				Badge:   v.Chatter.SingleBadge(),
+				Content: m.Trailing(),
+				Emotes:  emoList,
+			})
+
+		c.LogLine(llp)
+		c.forwardAlert(AlertSub, v.Chatter.Nick, struct {
+			Msg         LogLineParsed `json:"msg"`
+			MsgID       string        `json:"msg-id"`
+			Months      string        `json:"months"`
+			SubPlan     string        `json:"sub-plan"`
+			SubPlanName string        `json:"sub-plan-name"`
+		}{
+			llp,
+			string(m.Tags[TwitchTagMsgID]),
+			string(m.Tags[TwitchTagMsgParamMonths]),
+			string(m.Tags[TwitchTagSubPlan]),
+			string(m.Tags[TwitchTagSubPlanName]),
+		})
 
 	case TwitchCmdUserState:
 		nick := IrcNick(m.Name)
@@ -562,9 +594,6 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		v.Chatter.updateChatterFromTags(m)
 		v.Unlockme()
 
-		// Priority Badge
-		singleBadge := v.Chatter.SingleBadge()
-
 		// No Bits in Whisper
 		bVal := 0
 
@@ -585,7 +614,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				UserID:  v.TwitchID,
 				Nick:    v.Chatter.Nick,
 				Bits:    bVal,
-				Badge:   singleBadge,
+				Badge:   v.Chatter.SingleBadge(),
 				Content: m.Trailing(),
 				Emotes:  emoList,
 			})

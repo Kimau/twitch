@@ -75,6 +75,7 @@ var (
 		":skintrader_pl!skintrader_pl@skintrader_pl.tmi.twitch.tv JOIN #kimau",
 		":skintrader_pl!skintrader_pl@skintrader_pl.tmi.twitch.tv PART #kimau",
 		"@display-name=CohhKittenBot;emotes;mod=1;room-id=26610234;tmi-sent-ts=1489766625363;user-id=91400118;user-type=mod;badges=moderator/1,subscriber/12;color=#FF0000;id=5060a3e9-2d44-42c2-897a-07feb6db6edc;subscriber=1;turbo=0 :cohhkittenbot!cohhkittenbot@cohhkittenbot.tmi.twitch.tv CTCP #cohhcarnage :ACTION curls up for a nap",
+		"@id=d08d3654-8129-4cec-91e4-1ca18625ebe1;login=mcgerr;tmi-sent-ts=1494426407321;emotes;turbo=0;display-name=McGerr;msg-id=resub;msg-param-months=2;msg-param-sub-plan-name=Channel\\sSubscription\\s(CohhCarnage);msg-param-sub-plan=1000;system-msg=McGerr\\sjust\\ssubscribed\\swith\\sa\\s$4.99\\ssub.\\sMcGerr\\ssubscribed\\sfor\\s2\\smonths\\sin\\sa\\srow!;user-id=90548818;badges=subscriber/0;mod=0;room-id=26610234;subscriber=1;user-type;color :tmi.twitch.tv USERNOTICE #cohhcarnage :My second month! Love your stream, you're the best!",
 	}
 )
 

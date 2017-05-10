@@ -366,10 +366,13 @@ const (
 	TwitchTagUserSub           = "subscriber"
 	TwitchTagUserTurbo         = "turbo"
 	TwitchTagUserType          = "user-type"
+	TwitchTagSubPlan           = "msg-param-sub-plan"
+	TwitchTagSubPlanName       = "msg-param-sub-plan-name"
 )
 
 // Twitch User Notice Msg Id
 const (
+	TwitchUserNoticeSub     = "sub"
 	TwitchUserNoticeReSub   = "resub"
 	TwitchUserNoticeCharity = "charity"
 )
@@ -397,10 +400,10 @@ const (
 
 // Alert Name Types
 const (
-	AlertNone    AlertName = 0
-	AlertHost    AlertName = 100
-	AlertSub     AlertName = 200
-	AlertFollow  AlertName = 300
-	AlertBits    AlertName = 400
-	AlertWhisper AlertName = 500
+	AlertNone    AlertType = 0
+	AlertHost    AlertType = 100
+	AlertSub     AlertType = 200
+	AlertFollow  AlertType = 300
+	AlertBits    AlertType = 400
+	AlertWhisper AlertType = 500
 )
