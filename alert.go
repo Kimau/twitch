@@ -8,13 +8,13 @@ import (
 
 // Alert - The main method to find out when stuff has happened
 type Alert struct {
-	Name   AlertName `json:"name"`
-	Source IrcNick   `json:"source"`
-	Extra  int       `json:"extra"`
+	Name   AlertName   `json:"name"`
+	Source IrcNick     `json:"source"`
+	Data   interface{} `json:"data"`
 }
 
 func (a Alert) String() string {
-	return fmt.Sprintf("%s: %s %d", a.NameString(), a.Source, a.Extra)
+	return fmt.Sprintf("%s: %s - %s", a.NameString(), a.Source, a.Data)
 }
 
 // NameString - Gives Label for Type
@@ -30,6 +30,8 @@ func (a Alert) NameString() string {
 		return "Follow"
 	case AlertBits:
 		return "Bits"
+	case AlertWhisper:
+		return "Whisper"
 	}
 
 	return "UNKNOWN"
@@ -131,11 +133,11 @@ func (pump *AlertPump) Unsub(deadChannel chan Alert) {
 }
 
 // Post - Post Alert to Listeners
-func (pump *AlertPump) Post(source IrcNick, name AlertName, extra int) {
+func (pump *AlertPump) Post(source IrcNick, name AlertName, extraData interface{}) {
 	pump.newAlerts <- Alert{
 		Name:   name,
 		Source: source,
-		Extra:  extra,
+		Data:   extraData,
 	}
 }
 

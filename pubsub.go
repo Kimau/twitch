@@ -31,7 +31,23 @@ var (
 )
 
 //////////////////////////////////////////////////////////
-// Bit PubSubConn Data
+
+// PubSubBase - PS Message Base
+type PubSubBase struct {
+	Type  string `json:"type"`
+	Nonce string `json:"nonce,omitempty"`
+	Error string `json:"error,omitempty"`
+	Data  struct {
+		Topic   PubSubTopic `json:"topic"`
+		DataStr string      `json:"message"`
+	} `json:"data,omitempty"`
+}
+
+type psWrapper struct {
+	Type    string `json:"type"`
+	DataStr string `json:"data"`
+}
+
 type psBitsMsgData struct {
 	UserName      IrcNick `json:"user_name"`       // "user_name": "dallasnchains",
 	ChannelName   IrcNick `json:"channel_name"`    // "channel_name": "dallas",
@@ -70,8 +86,8 @@ type psSubMsgData struct {
 type psWhispMsgData struct {
 	Type string `json:"type"` // "type":"whisper_received",
 	Data struct {
-		ID int `json:"id"`
-	} `json:"data"`
+		DataID int `json:"id"`
+	} `json:"data,omitempty"`
 
 	ThreadID string `json:"thread_id"` //        "thread_id":"129454141_44322889",
 	Body     string `json:"body"`      //        "body":"hello",
@@ -85,7 +101,7 @@ type psWhispMsgData struct {
 		Badges      []Badge                  `json:"badges"`
 	} `json:"tags"`
 	Recipient struct {
-		ID          int     `json:"id"`           // "id":129454141,
+		RecpID      int     `json:"id"`           // "id":129454141,
 		Nick        IrcNick `json:"username"`     // "username":"dallasnchains",
 		DisplayName string  `json:"display_name"` //  "display_name":"dallasnchains",
 		Color       string  `json:"color"`
@@ -113,11 +129,11 @@ func (pss *PubSubTopic) UnmarshalJSON(b []byte) error {
 	}
 
 	subStr := regexPSTopic.FindStringSubmatch(s)
-	if len(subStr) != 2 {
-		return fmt.Errorf("Invalid length from: %s", s)
+	if len(subStr) != 3 {
+		return fmt.Errorf("Invalid length from: %d %s", len(subStr), s)
 	}
-	pss.Subject = subStr[0]
-	pss.Target = ID(subStr[1])
+	pss.Subject = subStr[1]
+	pss.Target = ID(subStr[2])
 	return nil
 }
 
@@ -137,17 +153,6 @@ func (psList PubSubTopicList) String() string {
 	}
 	topicListStr = strings.Trim(topicListStr, ", ")
 	return topicListStr
-}
-
-// PubSubMsg - PS Message Base
-type PubSubMsg struct {
-	Type  string `json:"type"`
-	Nonce string `json:"nonce"`
-	Error string `json:"error,omitempty"`
-	Data  struct {
-		Topic   PubSubTopic `json:"topic"`
-		DataStr string      `json:"message"`
-	} `json:"data,omitempty"`
 }
 
 // PubSubConn - Subsciption to Published Topic
@@ -213,24 +218,7 @@ func (ps *PubSubConn) runningLoop() {
 					ps.closePubSub("PUBSUB: Cmd Channel Closed")
 					continue
 				}
-
-				psm := PubSubMsg{}
-				err = json.Unmarshal([]byte(l), &psm)
-				switch psm.Type {
-				case "PONG":
-					ps.pongTimeOut.Stop()
-
-				case "RESPONSE":
-					if len(psm.Error) > 3 {
-						log.Printf("PUBSUB RESPONSE: %s", psm.Error)
-					}
-
-				case "MESSAGE":
-					log.Printf("PUBSUB MESSAGE: %s\n---\n%s", l, psm.Data)
-
-				default:
-					log.Printf("PUBSUB [DEBUG]: %s", l)
-				}
+				ps.handleCmdResponse([]byte(l))
 
 				// Ping Ticker
 			case _, ok := <-ps.pingTicker.C:
@@ -286,6 +274,85 @@ func (ps *PubSubConn) runningLoop() {
 			}
 		}
 
+	}
+}
+
+func (ps *PubSubConn) handleMessageResponse(msg *PubSubBase) error {
+	var err error
+
+	subList := PubSubTopicList{}
+	for _, c := range ps.activeTopics {
+		if c == msg.Data.Topic {
+			subList = append(subList, c)
+		}
+	}
+
+	if len(subList) < 1 {
+		return fmt.Errorf("No-one subbed to %s why are we getting it", msg.Data.Topic)
+	}
+
+	switch msg.Data.Topic.Subject {
+	case psChanBits:
+		bitData := psBitsMsgData{}
+		err = json.Unmarshal([]byte(msg.Data.DataStr), &bitData)
+
+	case psChanSubs:
+		subData := psSubMsgData{}
+		err = json.Unmarshal([]byte(msg.Data.DataStr), &subData)
+
+	case psVideoPlayback:
+		panic("TODO")
+
+	case psChatModActions:
+		panic("TODO")
+
+	case psUserWhispers:
+		wrapper := psWrapper{}
+		err = json.Unmarshal([]byte(msg.Data.DataStr), &wrapper)
+		if err != nil {
+			return err
+		}
+
+		whispData := psWhispMsgData{}
+		err = json.Unmarshal([]byte(wrapper.DataStr), &whispData)
+		if err != nil {
+			return err
+		}
+
+		// DO NOTHING atm
+		// TODO :: consolidate with chat whispers to avoid double alert
+
+	default:
+		panic("UNKNOWN")
+	}
+
+	return err
+}
+
+func (ps *PubSubConn) handleCmdResponse(inputData []byte) {
+	psm := PubSubBase{}
+	err := json.Unmarshal(inputData, &psm)
+	if err != nil {
+		log.Printf("PUBSUB [ERROR]: %s", err.Error())
+	}
+
+	switch psm.Type {
+	case "PONG":
+		ps.pongTimeOut.Stop()
+
+	case "RESPONSE":
+		if len(psm.Error) > 3 {
+			log.Printf("PUBSUB RESPONSE: %s", psm.Error)
+		}
+
+	case "MESSAGE":
+		err := ps.handleMessageResponse(&psm)
+		if err != nil {
+			log.Printf("PUBSUB [ERROR]: %s", err.Error())
+		}
+
+	default:
+		log.Printf("PUBSUB [DEBUG]: %s", inputData)
 	}
 }
 

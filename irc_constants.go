@@ -303,6 +303,7 @@ const (
 	TwitchCmdUserState       = "USERSTATE"       // When a user joins a channel or sends a PRIVMSG to a channel.
 	TwitchCmdHostTarget      = "HOSTTARGET"      // Host starts or stops a message.
 	TwitchCmdReconnect       = "RECONNECT"       // Rejoin channels after a restart.
+	TwitchCmdWhisper         = "WHISPER"         // Whisper Msg because why use direct PrivMsg like a normal IRC server
 )
 
 // Twitch Msg ID Tages
@@ -396,9 +397,10 @@ const (
 
 // Alert Name Types
 const (
-	AlertNone   AlertName = 0
-	AlertHost   AlertName = 100
-	AlertSub    AlertName = 200
-	AlertFollow AlertName = 300
-	AlertBits   AlertName = 400
+	AlertNone    AlertName = 0
+	AlertHost    AlertName = 100
+	AlertSub     AlertName = 200
+	AlertFollow  AlertName = 300
+	AlertBits    AlertName = 400
+	AlertWhisper AlertName = 500
 )

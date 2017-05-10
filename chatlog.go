@@ -12,23 +12,23 @@ import (
 //
 const (
 	ChatLogFormatHTML = `<div class="chatline %s">
-		<span class="time">%2d:%02d:%02d</span>
-		<span class="content">%s</span>
-		</div>`
+ 		<span class="time">%2d:%02d:%02d</span>
+ 		<span class="content">%s</span>
+ 		</div>`
 	ChatLogFormatMsgHTML = `<div class="chatline %s">
-		<span class="time">%2d:%02d:%02d</span>
-		<span class="id">%s</span>
-		<span class="badge">%s</span>
-		<span class="nick">%s</span>
-		<span class="content">%s</span>
-		</div>`
+ 		<span class="time">%2d:%02d:%02d</span>
+ 		<span class="id">%s</span>
+ 		<span class="badge">%s</span>
+ 		<span class="nick">%s</span>
+ 		<span class="content">%s</span>
+ 		</div>`
 	ChatLogFormatMsgExtraHTML = `<div class="chatline %s" style="background:%s;">
-		<span class="time">%2d:%02d:%02d</span>
-		<span class="id">%s</span>
-		<span class="badge">%s</span>
-		<span class="nick">%s</span>
-		<span class="content">%s</span>
-		</div>`
+ 		<span class="time">%2d:%02d:%02d</span>
+ 		<span class="id">%s</span>
+ 		<span class="badge">%s</span>
+ 		<span class="nick">%s</span>
+ 		<span class="content">%s</span>
+ 		</div>`
 	ChatLogFormatBadgeHTML = `<span class="%s"></span>`
 	ChatLogFormatString    = "IRC: %2d:%02d:%02d %c%s\n"
 )
@@ -50,6 +50,7 @@ const (
 	LogCatFiltered LogCat = '~'
 	LogCatMsg      LogCat = '#'
 	LogCatAction   LogCat = '!'
+	LogCatWhisper  LogCat = '>'
 	LogCatUnknown  LogCat = '?'
 
 	numInteralLogLines int = 1024
@@ -68,6 +69,8 @@ func (lc LogCat) FriendlyName() string {
 		return "Msg"
 	case LogCatAction:
 		return "Action"
+	case LogCatWhisper:
+		return "Whisper"
 	default:
 		return "Unknown"
 	}
@@ -246,7 +249,7 @@ func ParseLogLine(fullS string) (*LogLineParsed, error) {
 	llp.Cat = LogCat(sBits[4][0])
 	llp.Body = sBits[5]
 
-	if (llp.Cat == LogCatAction) || (llp.Cat == LogCatMsg) {
+	if (llp.Cat == LogCatAction) || (llp.Cat == LogCatMsg) || (llp.Cat == LogCatWhisper) {
 		err := llp.parseMsgBody()
 		return &llp, err
 	}
@@ -295,6 +298,15 @@ func (llp *LogLineParsed) parseMsgBody() error {
 
 }
 
+// HTMLBody - Replaces Emotes with <img> tags
+func (llp *LogLineParsed) HTMLBody(vp viewerProvider) string {
+	if llp.Msg == nil {
+		return llp.Body
+	}
+
+	return llp.Msg.Emotes.Replace(llp.Msg.Content)
+}
+
 // HTML - Produce HTML for Chat Line
 func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	seconds := llp.StampSeconds
@@ -304,7 +316,6 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	seconds -= minute * 60
 
 	catStr := llp.Cat.FriendlyName()
-
 	if llp.Msg == nil {
 		return fmt.Sprintf(ChatLogFormatHTML,
 			catStr,
@@ -341,6 +352,7 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	chatColor := "#DDD"
 	if v.Chatter != nil {
 		chatColor = v.Chatter.Color
+		return llp.Body
 	}
 	v.Unlockme()
 	//
@@ -353,7 +365,6 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 		badgeHTML,
 		llp.Msg.Nick,
 		msgContent)
-
 }
 
 func (llp *LogLineParsed) String() string {

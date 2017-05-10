@@ -115,8 +115,10 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 	kb.Viewers = CreateViewerMethod(&kb)
 	hvd, err := LoadMostRecentViewerDump(kb.RoomName)
 	if err == nil {
-		for _, v := range hvd.ViewerData {
-			kb.Viewers.Set(v)
+		if hvd != nil {
+			for _, v := range hvd.ViewerData {
+				kb.Viewers.Set(v)
+			}
 		}
 
 		err = kb.Viewers.SanityScan()

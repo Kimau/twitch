@@ -127,7 +127,7 @@ func (heart *Heartbeat) beat(t time.Time) {
 
 		if isFollowing && fTime.After(prevDataPoint.Time) {
 			// New Follow
-			heart.client.Alerts.Post(f.User.Name, AlertFollow, 0)
+			heart.client.Alerts.Post(f.User.Name, AlertFollow, nil)
 			adjustedTotal--
 		} else {
 			// Avoid 99% of the work
@@ -163,7 +163,7 @@ func (heart *Heartbeat) beat(t time.Time) {
 				}
 			}
 		} else {
-			heart.client.Alerts.Post(IrcNick(h.HostLogin), AlertHost, 0)
+			heart.client.Alerts.Post(IrcNick(h.HostLogin), AlertHost, nil)
 
 			newHostNames = append(newHostNames, h.HostLogin)
 		}
@@ -181,5 +181,5 @@ func (heart *Heartbeat) beat(t time.Time) {
 		heart.beats = append(heart.beats[1:], hbd)
 	}
 
-	heart.client.Alerts.Post(heart.client.RoomName, AlertNone, len(heart.beats)-1)
+	heart.client.Alerts.Post(heart.client.RoomName, AlertNone, hbd)
 }

@@ -217,12 +217,12 @@ func (c *Chat) respondToWelcome(m *irc.Message) {
 	c.WriteRawIrcMsg(fmt.Sprintf("JOIN #%s", c.viewers.GetRoomName()))
 }
 
-func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extra int) error {
+func (c *Chat) forwardAlert(aType AlertName, src IrcNick, extraData interface{}) error {
 	if c.weakClientRef == nil {
 		return fmt.Errorf("Weak Client Ref Missing")
 	}
 
-	c.weakClientRef.Alerts.Post(src, aType, extra)
+	c.weakClientRef.Alerts.Post(src, aType, extraData)
 	return nil
 }
 
@@ -541,8 +541,57 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		printDebugTag(m)
 
 	case IrcCmdMode:
-		// printDebugTag(m)
-		// TODO :: Handle Mode
+	// printDebugTag(m)
+	// TODO :: Handle Mode
+
+	case TwitchCmdWhisper:
+		// < WHISPER usernick :This is a sample message
+		// because why use normal IRC PRIVMSG stupid custom cmd
+
+		nick := IrcNick(m.Name)
+
+		v, err := c.viewers.Find(nick)
+		if err != nil {
+			log.Printf("PRIV MSG ERROR [%s] not found\n%s", nick, err)
+			return
+		}
+
+		// Whisper does not mean active in room
+		v.CreateChatter()
+		v.Lockme()
+		v.Chatter.updateChatterFromTags(m)
+		v.Unlockme()
+
+		// Priority Badge
+		singleBadge := v.Chatter.SingleBadge()
+
+		// No Bits in Whisper
+		bVal := 0
+
+		// Handle Emotes
+		var emoList EmoteReplaceListFromBack
+		emoteList, ok := m.Tags[TwitchTagMsgEmotes]
+		if ok {
+			emoList, err = emoteTagToList(emoteList)
+			if err != nil {
+				log.Printf("Unable to parse Emote Tag [%s]\n%s", emoteList, err)
+				emoList = []EmoteReplace{}
+			}
+		}
+
+		// Output
+		llp := MakeLogLineMsg(LogCatWhisper,
+			LogLineParsedMsg{
+				UserID:  v.TwitchID,
+				Nick:    v.Chatter.Nick,
+				Bits:    bVal,
+				Badge:   singleBadge,
+				Content: m.Trailing(),
+				Emotes:  emoList,
+			})
+
+		c.LogLine(llp)
+		c.forwardAlert(AlertWhisper, v.Chatter.Nick, llp)
 
 	case IrcCmdAction:
 		fallthrough
@@ -592,10 +641,6 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				log.Print("Bits error -", m, err)
 				bVal = 0
 			}
-
-			if bVal > 0 {
-				c.forwardAlert(AlertBits, v.Chatter.Nick, bVal)
-			}
 		}
 
 		// Handle Emotes
@@ -612,30 +657,22 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// Output
 		// # 111111 S10 nick emote
 		msgBody := m.Trailing()
+		llp := MakeLogLineMsg(LogCatMsg,
+			LogLineParsedMsg{
+				UserID:  v.TwitchID,
+				Nick:    v.Chatter.Nick,
+				Bits:    bVal,
+				Badge:   singleBadge,
+				Content: msgBody,
+				Emotes:  emoList,
+			})
 		if strings.HasPrefix(msgBody, "ACTION") {
-			c.LogLine(
-				MakeLogLineMsg(LogCatAction,
-					LogLineParsedMsg{
-						UserID:  v.TwitchID,
-						Nick:    v.Chatter.Nick,
-						Bits:    bVal,
-						Badge:   singleBadge,
-						Content: strings.TrimLeft(msgBody, "ACTION"),
-						Emotes:  emoList,
-					}))
+			llp.Msg.Content = strings.TrimLeft(msgBody, "ACTION")
+		}
+		c.LogLine(llp)
 
-		} else {
-			c.LogLine(
-				MakeLogLineMsg(LogCatMsg,
-					LogLineParsedMsg{
-						UserID:  v.TwitchID,
-						Nick:    v.Chatter.Nick,
-						Bits:    bVal,
-						Badge:   singleBadge,
-						Content: msgBody,
-						Emotes:  emoList,
-					}))
-
+		if bVal > 0 {
+			c.forwardAlert(AlertBits, v.Chatter.Nick, llp)
 		}
 
 	case IrcCmdNotice:

@@ -209,7 +209,7 @@ func LoadMostRecentViewerDump(chanName IrcNick) (*HistoricViewerData, error) {
 	}
 
 	if bigNum == 0 {
-		return nil, fmt.Errorf("Unable to find any listings")
+		return nil, nil
 	}
 
 	fileName := fmt.Sprintf(dumpFilePattern, chanName, bigNum)
