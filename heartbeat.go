@@ -117,31 +117,26 @@ func (heart *Heartbeat) beat(t time.Time) {
 
 	// Get Channel Followers
 	// If there are more then 30 follows in a SECOND who cares
-	fList, num, err := heart.client.Channel.GetFollowers(heart.client.RoomID, 30, true)
+	fList, followNum, err := heart.client.Channel.GetFollowers(heart.client.RoomID, 30, true)
 	heart.client.Viewers.UpdateFollowers(fList)
 
 	// Check for new followers
-	adjustedTotal := num
 	for _, f := range fList {
-		isFollowing, fTime := heart.client.Viewers.IsFollower(f.User.ID)
+		t, err := time.Parse(time.RFC3339, f.CreatedAtString)
+		if err != nil {
+			panic(err)
+		}
 
-		if isFollowing && fTime.After(prevDataPoint.Time) {
+		if t.After(prevDataPoint.Time) {
 			// New Follow
-			heart.client.Alerts.Post(f.User.Name, AlertFollow, nil)
-			adjustedTotal--
+			heart.client.Alerts.Post(f.User.Name, AlertFollow, t)
 		} else {
 			// Avoid 99% of the work
 			break
 		}
 	}
 
-	if heart.prevFollowCount > 0 && adjustedTotal < heart.prevFollowCount {
-		// Lost Followers
-		// TODO :: Hunt for the lost follow
-		log.Printf("Lost a follow but TODO that updating of status")
-	}
-
-	heart.prevFollowCount = num
+	heart.prevFollowCount = followNum
 
 	// List of Hosts
 	hostList, err := heart.client.Stream.GetHostsByUser(heart.client.RoomID)
