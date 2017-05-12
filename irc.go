@@ -156,18 +156,17 @@ func (c *Chat) activeInRoom(v *Viewer) time.Duration {
 		c.InRoom[nick] = v
 		v.Chatter.LastActive = newTime
 		return 0
-
-	} else {
-		// Earned Time
-		timeSince := newTime.Sub(v.Chatter.LastActive)
-
-		v.Chatter.TimeInChannel += timeSince
-		v.Chatter.LastActive = newTime
-
-		// log.Printf("Chat: ++Awarded++ %s : %s for total of %s", nick, timeSince, v.Chatter.TimeInChannel)
-
-		return timeSince
 	}
+
+	// Earned Time
+	timeSince := newTime.Sub(v.Chatter.LastActive)
+
+	v.Chatter.TimeInChannel += timeSince
+	v.Chatter.LastActive = newTime
+
+	// log.Printf("Chat: ++Awarded++ %s : %s for total of %s", nick, timeSince, v.Chatter.TimeInChannel)
+
+	return timeSince
 }
 
 // StartRunLoop - Start Run Loop

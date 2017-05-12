@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"encoding/json"
+	"strconv"
 )
 
 const (
@@ -319,8 +320,18 @@ func (ps *PubSubConn) handleMessageResponse(msg *PubSubBase) error {
 			return err
 		}
 
-		// DO NOTHING atm
 		// TODO :: consolidate with chat whispers to avoid double alert
+		llp := MakeLogLineMsg(LogCatWhisper,
+			LogLineParsedMsg{
+				UserID:  ID(strconv.Itoa(whispData.FromID)),
+				Nick:    whispData.Tags.Login,
+				Bits:    0,
+				Badge:   "",
+				Content: whispData.Body,
+				Emotes:  whispData.Tags.Emotes,
+			})
+
+		ps.weakClientRef.Alerts.Post(whispData.Tags.Login, AlertWhisper, llp)
 
 	default:
 		panic("UNKNOWN")
@@ -335,6 +346,8 @@ func (ps *PubSubConn) handleCmdResponse(inputData []byte) {
 	if err != nil {
 		log.Printf("PUBSUB [ERROR]: %s", err.Error())
 	}
+
+	// log.Printf("PUBSUB DEBUG: %s", inputData)
 
 	switch psm.Type {
 	case "PONG":
@@ -365,7 +378,7 @@ func (ps *PubSubConn) sendListen(topicList PubSubTopicList) error {
 		"data": { "topics": ["%s"], "auth_token": "%s" }}`,
 		nonce, topicList, authToken)
 
-	// log.Println("PUBSUB: " + listenJSON)
+	log.Printf("PUBSUB: LISTEN [%s]", topicList)
 
 	return ps.ws.WriteString(listenJSON)
 }
