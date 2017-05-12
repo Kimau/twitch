@@ -49,6 +49,8 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 		case TwitchTagMsgEmotes:
 		case TwitchTagMsgTime:
 		case TwitchTagMsgTimeTmi:
+		case TwitchTagThreadID:
+		case TwitchTagWhisperID:
 		// ----- End of Do Nothing -----
 
 		case TwitchTagMsgID:

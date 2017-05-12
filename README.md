@@ -4,11 +4,23 @@ Started as personal project I plug it into some other bits but I realised by bre
 
 Nothing is promised to be stable at this stage
 
+## Stuff that works
+* Twitch REST Basics
+* IRC Chat with Tags and Custom Commands
+
+| Twitch Rest API |    |
+|-----------------|----|
+| Channels        | 😊 |
+| Chat            | 😊 |
+| Users           | 😊 |
+
+## Stuff todo
+* Drops Support
+* Everything... else?
+
 | Twitch Rest API |    |
 |-----------------|----|
 | Channel Feed    | ❎ |
-| Channels        | 😊 |
-| Chat            | ❎ |
 | Collections     | ❎ |
 | Communities     | ❎ |
 | Games           | ❎ |
@@ -16,13 +28,4 @@ Nothing is promised to be stable at this stage
 | Search          | ❎ |
 | Streams         | ❎ |
 | Teams           | ❎ |
-| Users           | 😊 |
 | Videos          | ❎ |
-
-## Stuff that works
-* Twitch REST Basics
-* IRC Chat with Tags and Custom Commands
-
-## Stuff todo
-* Drops Support
-* Everything... else?

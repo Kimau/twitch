@@ -138,10 +138,12 @@ func (c *Chat) tickRoomActive() {
 
 func (c *Chat) partRoom(v *Viewer) {
 	c.activeInRoom(v)
-	delete(c.InRoom, v.GetNick())
+	nick := v.GetNick()
+	c.Logf(LogCatSystem, "Part %s", nick)
+	delete(c.InRoom, nick)
 }
 
-func (c *Chat) activeInRoom(v *Viewer) {
+func (c *Chat) activeInRoom(v *Viewer) time.Duration {
 	newTime := time.Now()
 	v.CreateChatter()
 
@@ -153,6 +155,8 @@ func (c *Chat) activeInRoom(v *Viewer) {
 	if !ok {
 		c.InRoom[nick] = v
 		v.Chatter.LastActive = newTime
+		return 0
+
 	} else {
 		// Earned Time
 		timeSince := newTime.Sub(v.Chatter.LastActive)
@@ -161,6 +165,8 @@ func (c *Chat) activeInRoom(v *Viewer) {
 		v.Chatter.LastActive = newTime
 
 		// log.Printf("Chat: ++Awarded++ %s : %s for total of %s", nick, timeSince, v.Chatter.TimeInChannel)
+
+		return timeSince
 	}
 }
 
@@ -399,8 +405,6 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.activeInRoom(v)
 
 	case IrcCmdPart: // User Parted Channel
-		c.Logf(LogCatSystem, "Part %s", m.Name)
-
 		nick := IrcNick(m.Name)
 		v, ok := c.InRoom[nick]
 		if ok {

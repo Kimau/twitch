@@ -40,6 +40,51 @@ func (a Alert) NameString() string {
 	return "UNKNOWN"
 }
 
+// IsDuplicate - Checks for Dupe Logic
+func (a Alert) IsDuplicate(other *Alert) bool {
+	if a.Type != other.Type || a.Source != other.Source {
+		return false
+	}
+
+	switch a.Type {
+	case AlertBits:
+		llpA, ok := a.Data.(LogLineParsed)
+		if !ok {
+			return true
+		}
+		llpB, ok := other.Data.(LogLineParsed)
+		if !ok {
+			return true
+		}
+
+		return llpA.Msg.Content == llpB.Msg.Content
+
+	case AlertWhisper:
+		llpA, ok := a.Data.(LogLineParsed)
+		if !ok {
+			return true
+		}
+		llpB, ok := other.Data.(LogLineParsed)
+		if !ok {
+			return true
+		}
+
+		return llpA.Msg.Content == llpB.Msg.Content
+
+		// Do nothing special
+	case AlertNone:
+		fallthrough
+	case AlertHost:
+		fallthrough
+	case AlertSub:
+		fallthrough
+	case AlertFollow:
+		fallthrough
+	default:
+		return true
+	}
+}
+
 type subToAlertPump struct {
 	Name string
 	C    chan Alert
@@ -147,6 +192,7 @@ func (pump *AlertPump) Post(source IrcNick, name AlertType, extraData interface{
 // CopyRecentAlerts - Make a copy of recent alerts and returns them
 func (pump *AlertPump) CopyRecentAlerts() (retList []Alert) {
 	pump.recentLock.Lock()
+	retList = make([]Alert, len(pump.recentAlerts), len(pump.recentAlerts))
 	copy(retList, pump.recentAlerts)
 	pump.recentLock.Unlock()
 	return retList
@@ -161,7 +207,7 @@ func (pump *AlertPump) postInternal(newAlert Alert) error {
 
 		// Sanity Check to avoid doubling of Alerts
 		for _, a := range pump.recentAlerts {
-			if (a.Type == newAlert.Type) && (a.Source == newAlert.Source) {
+			if a.IsDuplicate(&newAlert) {
 				return fmt.Errorf("Doubling of Prev Alert: %s", a)
 			}
 		}
@@ -182,5 +228,6 @@ func (pump *AlertPump) postInternal(newAlert Alert) error {
 		}
 	}
 
+	// log.Printf("New Alert [%d] %s", len(pump.recentAlerts), newAlert.NameString())
 	return nil
 }

@@ -356,6 +356,8 @@ const (
 	TwitchTagRoomSlow          = "slow"
 	TwitchTagRoomSubOnly       = "subs-only"
 	TwitchTagSystemMsg         = "system-msg"
+	TwitchTagWhisperID          = "message-id"
+	TwitchTagThreadID          = "thread-id"
 	TwitchTagUniqueID          = "id"
 	TwitchTagUserBadge         = "badges"
 	TwitchTagUserColor         = "color"

@@ -63,8 +63,8 @@ func (a EmoteReplaceListFromBack) Replace(source string) string {
 		source = fmt.Sprintf(`%s<img src="%s" alt="%s">%s`,
 			source[:erl.Start],
 			erl.ID.EmoteURL(false),
-			source[erl.Start:erl.End+1],
-			source[erl.End+1:])
+			source[erl.Start:erl.End],
+			source[erl.End:])
 	}
 
 	return source
@@ -114,7 +114,7 @@ func ParseEmoteReplaceListFromBack(src string) (EmoteReplaceListFromBack, error)
 		ret = append(ret, EmoteReplace{
 			ID:    EmoteID(emoID),
 			Start: sPos,
-			End:   ePos,
+			End:   ePos + 1,
 		})
 	}
 
@@ -158,7 +158,7 @@ func emoteTagToList(val irc.TagValue) (EmoteReplaceListFromBack, error) {
 			erList = append(erList, EmoteReplace{
 				ID:    egID,
 				Start: rsStartVal,
-				End:   rsEndVal,
+				End:   rsEndVal + 1,
 			})
 		}
 	}
