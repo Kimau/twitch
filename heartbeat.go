@@ -3,7 +3,6 @@ package twitch
 import (
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 )
@@ -21,7 +20,6 @@ type HeartbeatData struct {
 	Time      time.Time `json:"time"`
 	IsLive    bool      `json:"live"`
 	ViewCount int       `json:"view"`
-	HostList  []ID      `json:"hosts"`
 }
 
 // Heartbeat - A beat which captures some data
@@ -30,6 +28,7 @@ type HeartbeatData struct {
 // * host notifications
 type Heartbeat struct {
 	beats     []HeartbeatData
+	hosts     map[ID]time.Time
 	heartLock sync.RWMutex
 
 	prevFollowCount int
@@ -42,6 +41,7 @@ type Heartbeat struct {
 // StartBeat - Blocking Loop Which
 func (heart *Heartbeat) StartBeat() {
 	heart.prevFollowCount = -1
+	heart.hosts = make(map[ID]time.Time)
 
 	// First Beat
 	heart.beat(time.Now())
@@ -80,6 +80,17 @@ func (heart *Heartbeat) GetAllBeats() []HeartbeatData {
 
 	log.Printf("Beats Source %d", len(heart.beats))
 	return heart.beats[0:]
+}
+
+// GetAllHosts - Get All Hosts
+func (heart *Heartbeat) GetAllHosts() []ID {
+	keys := make([]ID, len(heart.hosts), len(heart.hosts))
+	i := 0
+	for k := range heart.hosts {
+		keys[i] = k
+		i++
+	}
+	return keys
 }
 
 func (heart *Heartbeat) beat(t time.Time) {
@@ -145,27 +156,31 @@ func (heart *Heartbeat) beat(t time.Time) {
 		return
 	}
 
-	newHostNames := []string{}
-
+	hostDiff := len(heart.hosts) - len(hostList)
 	for _, h := range hostList {
 		srcID := IDFromInt(h.HostID)
-		hbd.HostList = append(hbd.HostList, srcID)
-
-		if prevDataPoint != nil {
-			for _, h := range prevDataPoint.HostList {
-				if h == srcID {
-					continue
-				}
-			}
-		} else {
-			heart.client.Alerts.Post(IrcNick(h.HostLogin), AlertHost, nil)
-
-			newHostNames = append(newHostNames, h.HostLogin)
+		_, ok := heart.hosts[srcID]
+		if !ok {
+			// Trigger Alert
+			heart.hosts[srcID] = time.Now()
+			heart.client.Alerts.Post(IrcNick(h.HostLogin), AlertHost, h)
+			hostDiff++
 		}
 	}
 
-	if len(newHostNames) > 0 {
-		fmt.Printf("HOST STARTED: %s\n", strings.Join(newHostNames, ", "))
+	// We lost a host
+	if hostDiff > 0 {
+		for k := range heart.hosts {
+			isFound := false
+			for k2 := 0; !isFound && k2 < len(hostList); k2++ {
+				srcID := IDFromInt(hostList[k2].HostID)
+				isFound = (k == srcID)
+			}
+
+			if isFound == false {
+				delete(heart.hosts, k)
+			}
+		}
 	}
 
 	// Update Data Points
