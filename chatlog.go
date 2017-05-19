@@ -30,14 +30,13 @@ const (
  		<span class="content">%s</span>
  		</div>`
 	ChatLogFormatBadgeHTML = `<span class="%s"></span>`
-	ChatLogFormatString    = "IRC: %2d:%02d:%02d %c%s\n"
+	ChatLogFormatString    = "CHAT: %2d:%02d:%02d %c%s\n"
 )
 
 var (
-	regexLogMsg = regexp.MustCompile("^IRC: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([^ ])(.*)")
+	regexLogMsg = regexp.MustCompile("^CHAT: *([ 0-9][0-9]):([ 0-9][0-9]):([ 0-9][0-9]) ([^ ])(.*)")
 	// # TwitchID badge nick {emoteString}? [bitString]? : body
-	regexPrivMsg    = regexp.MustCompile("([[:word:]]+) ([[:graph:]]+) ([[:word:]]+)( +\\{[0-9,\\|]+\\})?( +\\[[[:word:]]+\\])? *: (.*)")
-	regexBadgeBreak = regexp.MustCompile("[^ 0-9][0-9]*")
+	regexPrivMsg = regexp.MustCompile("([[:word:]]+) \"([[:graph:]]+)\" ([[:word:]]+)( +\\{[0-9,\\|]+\\})?( +\\[[[:word:]]+\\])? *: (.*)")
 )
 
 // LogCat - The Type of Log Category message
@@ -90,7 +89,6 @@ type LogLineParsedMsg struct {
 	UserID  ID                       `json:"userid"`
 	Nick    IrcNick                  `json:"nick"`
 	Bits    int                      `json:"bits"`
-	Badge   string                   `json:"badge"` // https://badges.twitch.tv/v1/badges/global/display?language=en
 	Content string                   `json:"content"`
 	Emotes  EmoteReplaceListFromBack `json:"emotes"`
 }
@@ -268,7 +266,6 @@ func (llp *LogLineParsed) parseMsgBody() error {
 
 	llp.Msg = &LogLineParsedMsg{
 		UserID:  ID(subStrings[1]),
-		Badge:   subStrings[2],
 		Nick:    IrcNick(subStrings[3]),
 		Bits:    0,
 		Content: subStrings[6],
@@ -327,9 +324,6 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 
 	// Multiple Badges
 	badgeHTML := ""
-	for _, b := range regexBadgeBreak.FindAllStringSubmatch(llp.Msg.Badge, -1) {
-		badgeHTML += fmt.Sprintf(ChatLogFormatBadgeHTML, b[0])
-	}
 
 	// Get Viewer Data
 	v := vp.GetPtr(llp.Msg.UserID)
@@ -352,6 +346,11 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	chatColor := "#DDD"
 	if v.Chatter != nil {
 		chatColor = v.Chatter.Color
+
+		for badgeID, ver := range v.Chatter.Badges {
+			badgeHTML += v.client.Badges.BadgeHTML(badgeID, ver)
+		}
+
 		return llp.Body
 	}
 	v.Unlockme()
@@ -391,16 +390,23 @@ func (llp *LogLineParsed) SetTime(newTime time.Time) {
 
 // UpdateBody - Updates the Body string based on the current msg data
 func (llp *LogLineParsed) UpdateBody() {
-	// TwitchID badge nick {emoteString}? [bitString]? : body
-	if len(llp.Msg.Emotes) > 0 && llp.Msg.Bits > 0 {
-		llp.Body = fmt.Sprintf("%s %s %s {%s} [%d] : %s", llp.Msg.UserID, llp.Msg.Badge, llp.Msg.Nick, llp.Msg.Emotes, llp.Msg.Bits, llp.Msg.Content)
-	} else if len(llp.Msg.Emotes) > 0 {
-		llp.Body = fmt.Sprintf("%s %s %s {%s} : %s", llp.Msg.UserID, llp.Msg.Badge, llp.Msg.Nick, llp.Msg.Emotes, llp.Msg.Content)
-	} else if llp.Msg.Bits > 0 {
-		llp.Body = fmt.Sprintf("%s %s %s [%d] : %s", llp.Msg.UserID, llp.Msg.Badge, llp.Msg.Nick, llp.Msg.Bits, llp.Msg.Content)
-	} else {
-		llp.Body = fmt.Sprintf("%s %s %s : %s", llp.Msg.UserID, llp.Msg.Badge, llp.Msg.Nick, llp.Msg.Content)
-	}
+	llp.Body = fmt.Sprintf("%s %s %s %s : %s",
+		llp.Msg.UserID, llp.Msg.Nick,
+		func(em EmoteReplaceListFromBack) string { // Emote String
+			if len(em) == 0 {
+				return ""
+			}
+
+			return fmt.Sprintf("{%s}", em)
+		}(llp.Msg.Emotes),
+		func(bits int) string { // Bit String
+			if bits <= 0 {
+				return ""
+			}
+
+			return fmt.Sprintf("[%d]", bits)
+		}(llp.Msg.Bits), llp.Msg.Content)
+
 }
 
 // startChatLogPump - Start the internal go routine and create the pump

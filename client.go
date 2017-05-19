@@ -86,14 +86,15 @@ type Client struct {
 
 	PendingLogins map[authInternalState]time.Time
 
-	Viewers *ViewerMethod
-	Chat    *Chat
-	User    *UsersMethod
-	Channel *ChannelsMethod
-	Stream  *StreamsMethod
-	Heart   *Heartbeat
 	Alerts  *AlertPump
+	Badges  *BadgeMethod
+	Channel *ChannelsMethod
+	Chat    *Chat
+	Heart   *Heartbeat
 	PubSub  *PubSubConn
+	Stream  *StreamsMethod
+	User    *UsersMethod
+	Viewers *ViewerMethod
 }
 
 // CreateTwitchClient -
@@ -259,6 +260,9 @@ func (ah *Client) adminHasAuthed() {
 		panic(fmt.Sprintf("Unable to find room [%s]\n%s", ah.RoomName, err))
 	}
 	ah.RoomID = roomViewer.TwitchID
+
+	// Get Badges
+	ah.Badges = CreateBadgeMethod(ah)
 
 	// Get All Followers slowly
 	// for a big channel with a million follows this will take 3 hours

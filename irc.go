@@ -514,7 +514,6 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				UserID:  v.TwitchID,
 				Nick:    v.Chatter.Nick,
 				Bits:    0,
-				Badge:   v.Chatter.SingleBadge(),
 				Content: m.Trailing(),
 				Emotes:  emoList,
 			})
@@ -617,7 +616,6 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				UserID:  v.TwitchID,
 				Nick:    v.Chatter.Nick,
 				Bits:    bVal,
-				Badge:   v.Chatter.SingleBadge(),
 				Content: m.Trailing(),
 				Emotes:  emoList,
 			})
@@ -661,9 +659,6 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		v.Unlockme()
 		c.activeInRoom(v)
 
-		// Priority Badge
-		singleBadge := v.Chatter.SingleBadge()
-
 		// Handle Bits
 		bVal := 0
 		bits, ok := m.Tags[TwitchTagBits]
@@ -694,7 +689,6 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 				UserID:  v.TwitchID,
 				Nick:    v.Chatter.Nick,
 				Bits:    bVal,
-				Badge:   singleBadge,
 				Content: msgBody,
 				Emotes:  emoList,
 			})

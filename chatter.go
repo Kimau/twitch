@@ -10,12 +10,6 @@ import (
 	"github.com/go-irc/irc"
 )
 
-// Badge -
-type Badge struct {
-	ID      string `json:"id"`
-	Version string `json:"version"`
-}
-
 // Chatter - The IRC Chatter Data
 type Chatter struct {
 	Nick        IrcNick    `json:"nick"`
@@ -23,11 +17,11 @@ type Chatter struct {
 	EmoteSets   []EmoteSet `json:"emote_sets"`
 	Bits        int        `json:"bits"`
 
-	Mod      bool           `json:"mod"`
-	Sub      int            `json:"sub"`
-	UserType string         `json:"user_type"`
-	Badges   map[string]int `json:"badges"`
-	Color    string         `json:"color"`
+	Mod      bool       `json:"mod"`
+	Sub      int        `json:"sub"`
+	UserType string     `json:"user_type"`
+	Badges   ChatBadges `json:"badges"`
+	Color    string     `json:"color"`
 
 	TimeInChannel time.Duration `json:"time_in_channel"`
 	LastActive    time.Time     `json:"last_active"`
@@ -84,31 +78,16 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 
 		case TwitchTagUserTurbo:
 			if cu.Badges == nil {
-				cu.Badges = make(map[string]int)
+				cu.Badges = make(ChatBadges)
 			}
-			cu.Badges[TwitchTagUserTurbo] = 1
+			cu.Badges[TwitchTagUserTurbo] = "1"
 
 		case TwitchTagUserBadge:
-			cu.Badges = make(map[string]int)
+			cu.Badges = make(ChatBadges)
 			if len(tagVal) < 1 {
 				continue
 			}
-
-			for _, badgeStr := range strings.Split(string(tagVal), ",") {
-				iVal := 0
-				// fmt.Printf("BADGE [%s]", badgeStr)
-				t := strings.Split(badgeStr, "/")
-				testVal, err := strconv.Atoi(t[1])
-				if err != nil {
-					log.Println(tagName, badgeStr, err)
-				} else {
-					iVal = testVal
-				}
-				if t[0] == TwitchBadgeBits {
-					cu.Bits = iVal
-				}
-				cu.Badges[t[0]] = iVal
-			}
+			cu.Badges = ChatBadgesFromString(string(tagVal))
 
 		case TwitchTagUserColor:
 			cu.Color = string(tagVal)
@@ -166,53 +145,4 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 	}
 
 	return cu
-}
-
-// SingleBadge - Outputs Badge to Display based on priority
-// https://badges.twitch.tv/v1/badges/global/display?language=en
-// https://badges.twitch.tv/v1/badges/channels/x/display?language=en
-func (cu *Chatter) SingleBadge() string {
-	// Only add one of these badges
-	r := "."
-	for _, v := range [][]string{
-		{TwitchBadgeBroadcaster, "C"},
-		{TwitchBadgeStaff, "X"},
-		{TwitchBadgeGlobalMod, "G"},
-		{TwitchBadgeMod, "M"},
-		{TwitchBadgeSub, ""},
-		{TwitchBadgePrime, "P"},
-		{TwitchBadgeTurbo, "T"},
-	} {
-		_, ok := cu.Badges[v[0]]
-		if ok {
-			r = v[1]
-			break
-		}
-	}
-
-	// Special Badge Logic & to catch unknown badge types
-	for n, v := range cu.Badges {
-		switch n {
-		case TwitchBadgeStaff:
-		case TwitchBadgeTurbo:
-		case TwitchBadgePrime:
-		case TwitchBadgeSub:
-			r += fmt.Sprintf("S%d", v)
-		case TwitchBadgeMod:
-		case TwitchBadgeGlobalMod:
-		case TwitchBadgeBroadcaster:
-		case TwitchBadgeBits:
-		default:
-			r += fmt.Sprintf("(%s%d)", n, v)
-		}
-
-	}
-
-	// Badge Bits
-	b, ok := cu.Badges[TwitchBadgeBits]
-	if ok {
-		return fmt.Sprintf("%sB%d", r, b)
-	}
-
-	return r
 }

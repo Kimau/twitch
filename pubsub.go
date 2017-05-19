@@ -99,14 +99,20 @@ type psWhispMsgData struct {
 		DisplayName string                   `json:"display_name"` // "display_name":"dallas",
 		Emotes      EmoteReplaceListFromBack `json:"emotes"`       // Emote List
 		Color       string                   `json:"color"`        // "color":"#8A2BE2",
-		Badges      []Badge                  `json:"badges"`
+		Badges      []struct {
+			ID      string `json:"id"`
+			Version int    `json:"version"`
+		} `json:"badges"`
 	} `json:"tags"`
 	Recipient struct {
 		RecpID      int     `json:"id"`           // "id":129454141,
 		Nick        IrcNick `json:"username"`     // "username":"dallasnchains",
 		DisplayName string  `json:"display_name"` //  "display_name":"dallasnchains",
 		Color       string  `json:"color"`
-		Badges      []Badge `json:"badges"`
+		Badges      []struct {
+			ID      string `json:"id"`
+			Version int    `json:"version"`
+		} `json:"badges"`
 	} `json:"recipient"`
 }
 
@@ -326,7 +332,6 @@ func (ps *PubSubConn) handleMessageResponse(msg *PubSubBase) error {
 				UserID:  ID(strconv.Itoa(whispData.FromID)),
 				Nick:    whispData.Tags.Login,
 				Bits:    0,
-				Badge:   "",
 				Content: whispData.Body,
 				Emotes:  whispData.Tags.Emotes,
 			})
