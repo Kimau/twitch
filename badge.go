@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 const (
@@ -24,6 +25,13 @@ type BadgeData struct {
 	ClickURL    string `json:"click_url"`    //  "https://blog.twitch.tv/introducing-cheering-celebrate-together-da62af41fac6"
 }
 
+// BadgeDataWrap - Badge Wrapper for safe passing around
+type BadgeDataWrap struct {
+	Badge   string       `json:"badge"`
+	Version BadgeVersion `json:"version"`
+	Data    BadgeData    `json:"data"`
+}
+
 // BadgeVersion - The numerical version of the Badge like 3 for 3 month sub
 type BadgeVersion string
 
@@ -38,6 +46,7 @@ type badgeSetInteralJSON struct {
 type BadgeMethod struct {
 	client *Client
 
+	m           sync.Mutex
 	RoomBadge   map[string]BadgeVersionList
 	GlobalBadge map[string]BadgeVersionList
 }
@@ -85,12 +94,12 @@ func CreateBadgeMethod(ah *Client) *BadgeMethod {
 
 	// Get Room Set
 	roomURL := fmt.Sprintf(badgeChanAddr, bm.client.RoomID)
-	bm.GlobalBadge = bm.fetchBadgeList(roomURL)
+	bm.RoomBadge = bm.fetchBadgeList(roomURL)
 
 	return &bm
 }
 
-func (bm BadgeMethod) fetchBadgeList(url string) map[string]BadgeVersionList {
+func (bm *BadgeMethod) fetchBadgeList(url string) map[string]BadgeVersionList {
 	bset := struct {
 		BadgeSets map[string]badgeSetInteralJSON `json:"badge_sets"`
 	}{
@@ -138,8 +147,26 @@ func (bm BadgeMethod) fetchBadgeList(url string) map[string]BadgeVersionList {
 	return finalSet
 }
 
+// GetBadgeSafe - Get Badge Data Wrapper
+func (bm *BadgeMethod) GetBadgeSafe(badgeID string, ver BadgeVersion) (BadgeDataWrap, error) {
+
+	bData := bm.Badge(badgeID, ver)
+	if bData == nil {
+		return BadgeDataWrap{badgeID, ver, BadgeData{}}, fmt.Errorf("Unable to find Badge")
+	}
+
+	return BadgeDataWrap{
+		badgeID,
+		ver,
+		*bData,
+	}, nil
+}
+
 // Badge - Get Badge Data
-func (bm BadgeMethod) Badge(badgeID string, ver BadgeVersion) *BadgeData {
+func (bm *BadgeMethod) Badge(badgeID string, ver BadgeVersion) *BadgeData {
+	bm.m.Lock()
+	defer bm.m.Unlock()
+
 	bVal, ok := bm.RoomBadge[badgeID]
 	if ok {
 		bVer, ok := bVal[ver]
@@ -161,7 +188,7 @@ func (bm BadgeMethod) Badge(badgeID string, ver BadgeVersion) *BadgeData {
 }
 
 // BadgeHTML - Get Badge HTML
-func (bm BadgeMethod) BadgeHTML(badgeID string, ver BadgeVersion) string {
+func (bm *BadgeMethod) BadgeHTML(badgeID string, ver BadgeVersion) string {
 	bVer := bm.Badge(badgeID, ver)
 
 	if bVer != nil {
