@@ -41,6 +41,7 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 		case TwitchTagBits: // Do nothing with bits value getting from Badge
 		case TwitchTagSystemMsg:
 		case TwitchTagMsgEmotes:
+		case TwitchTagEmoteOnly: // Msg only contains emotes
 		case TwitchTagMsgTime:
 		case TwitchTagMsgTimeTmi:
 		case TwitchTagThreadID:
