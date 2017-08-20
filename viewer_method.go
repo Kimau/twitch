@@ -47,12 +47,16 @@ func (vm *ViewerMethod) GetRoomName() IrcNick {
 }
 
 // Set - Set New Viewer Value
-func (vm *ViewerMethod) Set(v Viewer) {
+func (vm *ViewerMethod) Set(v *Viewer) {
 	vm.lockmap()
 	defer vm.unlockmap()
 
 	newV := vm.allocViewer(v.TwitchID)
-	*newV = v
+
+	newV.User = v.User
+	newV.Auth = v.Auth
+	newV.Chatter = v.Chatter
+	newV.Follower = v.Follower
 
 	if newV.Follower == nil {
 		delete(vm.followerCache, newV.TwitchID)

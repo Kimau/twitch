@@ -53,6 +53,7 @@ type CheerReplace struct {
 	End   int     `json:"end"`
 }
 
+// CheerReplaceList - Cheer Replacement List
 type CheerReplaceList []CheerReplace
 
 func (a CheerReplaceList) Len() int           { return len(a) }
@@ -65,7 +66,7 @@ func (a CheerReplaceList) String() string {
 			r += "|"
 		}
 
-		r += fmt.Sprintf("%s,%d,%d", v.Bit, v.Start, v.End)
+		r += fmt.Sprintf("%v,%d,%d", v.Bit, v.Start, v.End)
 	}
 
 	return r
@@ -87,15 +88,12 @@ func (ba *BitActions) getCheerTiers(input string, bitsUsed int) []CheerReplace {
 	var result CheerReplaceList
 	totalAmount := 0
 
-	inputLength := len(input)
-
 	for _, a := range ba.Actions {
-		offset := 0
 
 		actRe := regexp.MustCompile(a.Prefix + "([0-9]+)")
 
 		indexList := actRe.FindAllStringSubmatchIndex(input, -1)
-		for i, matches := range indexList {
+		for _, matches := range indexList {
 			am, err := strconv.Atoi(input[matches[2]:matches[3]])
 			if err != nil {
 				panic(err)

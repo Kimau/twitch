@@ -117,8 +117,9 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 	hvd, err := LoadMostRecentViewerDump(kb.RoomName)
 	if err == nil {
 		if hvd != nil {
-			for _, v := range hvd.ViewerData {
-				kb.Viewers.Set(v)
+			for k := range hvd.ViewerData {
+				v := hvd.ViewerData[k]
+				kb.Viewers.Set(&v)
 			}
 		}
 

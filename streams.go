@@ -67,7 +67,7 @@ func (c *StreamsMethod) GetStreamByUser(id ID) (*StreamBody, error) {
 	}
 
 	if resp.Body.ResponseID == 0 {
-		return nil, fmt.Errorf("Not Streaming %d", id)
+		return nil, fmt.Errorf("Not Streaming %s", id)
 	}
 
 	return &resp.Body, nil

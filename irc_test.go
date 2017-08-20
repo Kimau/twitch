@@ -166,7 +166,6 @@ func TestIrcMessage(t *testing.T) {
 			pup.Msg.UserID == llp.Msg.UserID &&
 			pup.Msg.Nick == llp.Msg.Nick &&
 			pup.Msg.Bits == llp.Msg.Bits &&
-			pup.Msg.Badge == llp.Msg.Badge &&
 			pup.Msg.Content == llp.Msg.Content &&
 			len(pup.Msg.Emotes) == len(llp.Msg.Emotes) {
 

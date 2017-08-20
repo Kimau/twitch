@@ -60,7 +60,7 @@ func (ah *Client) loadToken() {
 	// Check Token
 	err = ah.getRootToken(&userAuthTemp)
 	if err != nil {
-		log.Printf("--------FAIL TOKEN-----------\n%s\n---\n%s", err, ah.AdminAuth)
+		log.Printf("--------FAIL TOKEN-----------\n%s\n---\n%v", err, ah.AdminAuth)
 		return
 	}
 

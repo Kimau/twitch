@@ -134,24 +134,24 @@ func TestUserFull(t *testing.T) {
 	}
 	if testUser.EmailIsVerified != user.EmailIsVerified {
 		t.Fail()
-		t.Logf("EmailIsVerified [%s:%s] not equal", testUser.EmailIsVerified, user.EmailIsVerified)
+		t.Logf("EmailIsVerified [%t:%t] not equal", testUser.EmailIsVerified, user.EmailIsVerified)
 	}
 	if testUser.Partnered != user.Partnered {
 		t.Fail()
-		t.Logf("Partnered [%s:%s] not equal", testUser.Partnered, user.Partnered)
+		t.Logf("Partnered [%t:%t] not equal", testUser.Partnered, user.Partnered)
 	}
 	if testUser.TwitterConnected != user.TwitterConnected {
 		t.Fail()
-		t.Logf("TwitterConnected [%s:%s] not equal", testUser.TwitterConnected, user.TwitterConnected)
+		t.Logf("TwitterConnected [%t:%t] not equal", testUser.TwitterConnected, user.TwitterConnected)
 	}
 
 	if testUser.Notification.Email != user.Notification.Email {
 		t.Fail()
-		t.Logf("Notification.Email [%s:%s] not equal", testUser.Notification.Email, user.Notification.Email)
+		t.Logf("Notification.Email [%t:%t] not equal", testUser.Notification.Email, user.Notification.Email)
 	}
 	if testUser.Notification.Push != user.Notification.Push {
 		t.Fail()
-		t.Logf("Notification.Push [%s:%s] not equal", testUser.Notification.Push, user.Notification.Push)
+		t.Logf("Notification.Push [%t:%t] not equal", testUser.Notification.Push, user.Notification.Push)
 	}
 }
 
