@@ -148,8 +148,10 @@ func (ah *Client) handlePublicOAuthResult(w http.ResponseWriter, req *http.Reque
 		v := ah.Viewers.GetPtr(tID)
 		v.SetAuth(*authU)
 
-		http.SetCookie(w, v.Auth.createSessionCookie(ah.domain))
-		fmt.Fprintf(w, "Logged in %s #%s", v.GetNick(), tID)
+		vd := v.GetData()
+
+		http.SetCookie(w, vd.Auth.createSessionCookie(ah.domain))
+		fmt.Fprintf(w, "Logged in %s #%s", vd.GetNick(), tID)
 	}
 }
 

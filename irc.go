@@ -137,36 +137,26 @@ func (c *Chat) tickRoomActive() {
 }
 
 func (c *Chat) partRoom(v *Viewer) {
-	c.activeInRoom(v)
-	nick := v.GetNick()
-	c.Logf(LogCatSystem, "Part %s", nick)
-	delete(c.InRoom, nick)
+	chatter := c.activeInRoom(v)
+
+	c.Logf(LogCatSystem, "Part %s", chatter.Nick)
+	delete(c.InRoom, chatter.Nick)
 }
 
-func (c *Chat) activeInRoom(v *Viewer) time.Duration {
-	newTime := time.Now()
-	v.CreateChatter()
+func (c *Chat) activeInRoom(v *Viewer) Chatter {
+	chatter := v.CreateChatter()
 
-	v.Lockme()
-	defer v.Unlockme()
-
-	nick := v.GetNick()
-	_, ok := c.InRoom[nick]
+	_, ok := c.InRoom[chatter.Nick]
 	if !ok {
-		c.InRoom[nick] = v
-		v.Chatter.LastActive = newTime
-		return 0
+		c.InRoom[chatter.Nick] = v
+		return chatter
 	}
 
-	// Earned Time
-	timeSince := newTime.Sub(v.Chatter.LastActive)
-
-	v.Chatter.TimeInChannel += timeSince
-	v.Chatter.LastActive = newTime
+	v.SetChatter(chatter)
 
 	// log.Printf("Chat: ++Awarded++ %s : %s for total of %s", nick, timeSince, v.Chatter.TimeInChannel)
 
-	return timeSince
+	return chatter
 }
 
 // StartRunLoop - Start Run Loop
@@ -254,12 +244,14 @@ func (c *Chat) hostUpdate(src IrcNick, target IrcNick, numViewers int) error {
 }
 
 func (c *Chat) nowHosting(target *Viewer) {
-	c.mode.hosting = target
 
 	if target == nil {
+		c.mode.hosting = nil
 		c.Logf(LogCatSystem, "No longer hosting.")
 	} else {
-		c.Logf(LogCatSystem, "Now Hosting %s", target.User.DisplayName)
+		d := target.GetData()
+		c.mode.hosting = &d
+		c.Logf(LogCatSystem, "Now Hosting %s", d.User.DisplayName)
 	}
 }
 
@@ -424,8 +416,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		if err != nil {
 			panic(err)
 		}
-		v.CreateChatter()
-		v.Chatter.updateChatterFromTags(m)
+		chatter := v.CreateChatter()
+		chatter.updateChatterFromTags(m)
+		v.SetChatter(chatter)
 
 		c.Logf(LogCatSilent, "Global User State for %s", nick)
 
@@ -491,10 +484,9 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		if v == nil {
 			panic("USER NOTICE CANNOT GET " + m.Tags[TwitchTagUserID])
 		}
-		v.CreateChatter()
-		v.Lockme()
-		v.Chatter.updateChatterFromTags(m)
-		v.Unlockme()
+		chatter := v.CreateChatter()
+		chatter.updateChatterFromTags(m)
+		v.SetChatter(chatter)
 
 		// Handle Emotes
 		var err error
@@ -511,15 +503,15 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// Make Msg
 		llp := MakeLogLineMsg(LogCatMsg,
 			LogLineParsedMsg{
-				UserID:  v.TwitchID,
-				Nick:    v.Chatter.Nick,
+				UserID:  chatter.id,
+				Nick:    chatter.Nick,
 				Bits:    0,
 				Content: m.Trailing(),
 				Emotes:  emoList,
 			})
 
 		c.LogLine(llp)
-		c.forwardAlert(AlertSub, v.Chatter.Nick, struct {
+		c.forwardAlert(AlertSub, chatter.Nick, struct {
 			Msg         LogLineParsed `json:"msg"`
 			MsgID       string        `json:"msg-id"`
 			Months      string        `json:"months"`
@@ -545,12 +537,11 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			panic(err)
 		}
 
-		v.CreateChatter()
-		v.Lockme()
-		v.Chatter.updateChatterFromTags(m)
-		v.Unlockme()
+		chatter := v.CreateChatter()
+		chatter.updateChatterFromTags(m)
+		chatter.updateTime()
 
-		c.activeInRoom(v)
+		v.SetChatter(chatter)
 		c.Logf(LogCatSystem, "User State updated from %s in %s", nick, m.Trailing())
 
 	case TwitchCmdHostTarget:
@@ -591,10 +582,8 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		}
 
 		// Whisper does not mean active in room
-		v.CreateChatter()
-		v.Lockme()
-		v.Chatter.updateChatterFromTags(m)
-		v.Unlockme()
+		chatter := v.CreateChatter()
+		v.SetChatter(chatter)
 
 		// No Bits in Whisper
 		bVal := 0
@@ -613,15 +602,15 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		// Output
 		llp := MakeLogLineMsg(LogCatWhisper,
 			LogLineParsedMsg{
-				UserID:  v.TwitchID,
-				Nick:    v.Chatter.Nick,
+				UserID:  chatter.id,
+				Nick:    chatter.Nick,
 				Bits:    bVal,
 				Content: m.Trailing(),
 				Emotes:  emoList,
 			})
 
 		c.LogLine(llp)
-		c.forwardAlert(AlertWhisper, v.Chatter.Nick, llp)
+		c.forwardAlert(AlertWhisper, chatter.Nick, llp)
 
 	case IrcCmdAction:
 		fallthrough
@@ -653,10 +642,11 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 			return
 		}
 
-		v.CreateChatter()
-		v.Lockme()
-		v.Chatter.updateChatterFromTags(m)
-		v.Unlockme()
+		chatter := v.CreateChatter()
+		chatter.updateChatterFromTags(m)
+		chatter.updateTime()
+		v.SetChatter(chatter)
+
 		c.activeInRoom(v)
 
 		// Handle Bits
@@ -686,8 +676,8 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		msgBody := m.Trailing()
 		llp := MakeLogLineMsg(LogCatMsg,
 			LogLineParsedMsg{
-				UserID:  v.TwitchID,
-				Nick:    v.Chatter.Nick,
+				UserID:  chatter.id,
+				Nick:    chatter.Nick,
 				Bits:    bVal,
 				Content: msgBody,
 				Emotes:  emoList,
@@ -698,7 +688,7 @@ func (c *Chat) Handle(irc *irc.Client, m *irc.Message) {
 		c.LogLine(llp)
 
 		if bVal > 0 {
-			c.forwardAlert(AlertBits, v.Chatter.Nick, llp)
+			c.forwardAlert(AlertBits, chatter.Nick, llp)
 		}
 
 	case IrcCmdNotice:

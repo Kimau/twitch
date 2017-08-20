@@ -326,8 +326,8 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	badgeHTML := ""
 
 	// Get Viewer Data
-	v := vp.GetPtr(llp.Msg.UserID)
-	if v == nil {
+	v, err := vp.GetData(llp.Msg.UserID)
+	if err != nil {
 		return fmt.Sprintf(ChatLogFormatMsgHTML,
 			catStr,
 			hour, minute, seconds,
@@ -338,7 +338,6 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 	}
 
 	// View Lock
-	v.Lockme()
 	if v.Follower != nil {
 		catStr += " follow"
 	}
@@ -348,12 +347,11 @@ func (llp *LogLineParsed) HTML(vp viewerProvider) string {
 		chatColor = v.Chatter.Color
 
 		for badgeID, ver := range v.Chatter.Badges {
-			badgeHTML += v.client.Badges.BadgeHTML(badgeID, ver)
+			badgeHTML += vp.Client().Badges.BadgeHTML(badgeID, ver)
 		}
 
 		return llp.Body
 	}
-	v.Unlockme()
 	//
 
 	return fmt.Sprintf(ChatLogFormatMsgExtraHTML,

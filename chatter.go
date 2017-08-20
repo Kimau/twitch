@@ -29,7 +29,17 @@ type Chatter struct {
 	id ID // not cannonical data
 }
 
-func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
+func (ch *Chatter) updateTime() time.Duration {
+	newTime := time.Now()
+
+	timeSince := newTime.Sub(ch.LastActive)
+	ch.TimeInChannel += timeSince
+	ch.LastActive = newTime
+
+	return timeSince
+}
+
+func (ch *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 
 	for tagName, tagVal := range m.Tags {
 		switch tagName {
@@ -62,7 +72,7 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 					continue
 				}
 
-				cu.Sub = mVal
+				ch.Sub = mVal
 
 			case TwitchUserNoticeCharity:
 			// TODO :: Handle Charity Bits
@@ -72,44 +82,44 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 			}
 
 		case TwitchTagUserID:
-			cu.id = ID(tagVal)
+			ch.id = ID(tagVal)
 
 		case TwitchTagLogin:
-			cu.Nick = IrcNick(tagVal)
+			ch.Nick = IrcNick(tagVal)
 
 		case TwitchTagUserTurbo:
-			if cu.Badges == nil {
-				cu.Badges = make(ChatBadges)
+			if ch.Badges == nil {
+				ch.Badges = make(ChatBadges)
 			}
-			cu.Badges[TwitchTagUserTurbo] = "1"
+			ch.Badges[TwitchTagUserTurbo] = "1"
 
 		case TwitchTagUserBadge:
-			cu.Badges = make(ChatBadges)
+			ch.Badges = make(ChatBadges)
 			if len(tagVal) < 1 {
 				continue
 			}
-			cu.Badges = ChatBadgesFromString(string(tagVal))
+			ch.Badges = ChatBadgesFromString(string(tagVal))
 
 		case TwitchTagUserColor:
-			cu.Color = string(tagVal)
+			ch.Color = string(tagVal)
 
 		case TwitchTagUserDisplayName:
-			cu.DisplayName = string(tagVal)
-			if cu.Nick == "" {
-				cu.Nick = IrcNick(tagVal)
+			ch.DisplayName = string(tagVal)
+			if ch.Nick == "" {
+				ch.Nick = IrcNick(tagVal)
 			}
 		case TwitchTagUserEmoteSet:
 			emoteStrings := strings.Split(string(tagVal), ",")
-			cu.EmoteSets = []EmoteSet{}
+			ch.EmoteSets = []EmoteSet{}
 			for _, v := range emoteStrings {
-				cu.EmoteSets = append(cu.EmoteSets, EmoteSet(v))
+				ch.EmoteSets = append(ch.EmoteSets, EmoteSet(v))
 			}
 		case TwitchTagUserMod:
 			intVal, err := strconv.Atoi(string(tagVal))
 			if err != nil {
 				log.Println(tagName, tagVal, err)
 			} else {
-				cu.Mod = (intVal > 0)
+				ch.Mod = (intVal > 0)
 			}
 
 		case TwitchTagUserSub:
@@ -117,26 +127,26 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 			if err != nil {
 				log.Println(tagName, tagVal, err)
 			} else {
-				if intVal < 1 || intVal > cu.Sub {
-					cu.Sub = intVal
+				if intVal < 1 || intVal > ch.Sub {
+					ch.Sub = intVal
 				}
 
 			}
 
 		case TwitchTagUserType:
-			cu.UserType = string(tagVal)
+			ch.UserType = string(tagVal)
 
-			switch cu.UserType {
+			switch ch.UserType {
 			case TwitchTypeEmpty:
-				cu.Mod = false
+				ch.Mod = false
 			case TwitchTypeMod:
-				cu.Mod = true
+				ch.Mod = true
 			case TwitchTypeGlobalMod:
-				cu.Mod = true
+				ch.Mod = true
 			case TwitchTypeAdmin:
-				cu.Mod = true
+				ch.Mod = true
 			case TwitchTypeStaff:
-				cu.Mod = true
+				ch.Mod = true
 			}
 
 		default:
@@ -145,5 +155,5 @@ func (cu *Chatter) updateChatterFromTags(m *irc.Message) *Chatter {
 		}
 	}
 
-	return cu
+	return ch
 }

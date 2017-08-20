@@ -28,6 +28,11 @@ func CreateViewerMethod(c *Client) *ViewerMethod {
 	}
 }
 
+// Client - Get Client Ptr
+func (vm *ViewerMethod) Client() *Client {
+	return vm.client
+}
+
 func (vm *ViewerMethod) lockmap() {
 	vm.mapLock.Lock()
 }
@@ -47,21 +52,14 @@ func (vm *ViewerMethod) GetRoomName() IrcNick {
 }
 
 // Set - Set New Viewer Value
-func (vm *ViewerMethod) Set(v *Viewer) {
-	vm.lockmap()
-	defer vm.unlockmap()
+func (vm *ViewerMethod) Set(vd ViewerData) {
+	newV := vm.allocViewer(vd.TwitchID)
+	newV.data = vd
 
-	newV := vm.allocViewer(v.TwitchID)
-
-	newV.User = v.User
-	newV.Auth = v.Auth
-	newV.Chatter = v.Chatter
-	newV.Follower = v.Follower
-
-	if newV.Follower == nil {
-		delete(vm.followerCache, newV.TwitchID)
+	if vd.Follower == nil {
+		delete(vm.followerCache, vd.TwitchID)
 	} else {
-		vm.followerCache[newV.TwitchID] = ChannelRelationship(*newV.Follower).CreatedAt()
+		vm.followerCache[vd.TwitchID] = ChannelRelationship(*vd.Follower).CreatedAt()
 	}
 }
 
@@ -69,7 +67,7 @@ func (vm *ViewerMethod) Set(v *Viewer) {
 func (vm *ViewerMethod) SetFollower(newVal ChannelFollow) {
 	v := vm.GetFromUser(*newVal.User)
 	v.Lockme()
-	v.Follower = &newVal
+	v.data.Follower = &newVal
 	v.Unlockme()
 
 	vm.lockmap()
@@ -85,7 +83,7 @@ func (vm *ViewerMethod) ClearFollower(tid ID) {
 	v, ok := vm.viewers[tid]
 	if ok {
 		v.Lockme()
-		v.Follower = nil
+		v.data.Follower = nil
 		v.Unlockme()
 	}
 	delete(vm.followerCache, tid)
@@ -112,19 +110,6 @@ func (vm *ViewerMethod) AllKeys() []ID {
 	return myKeys
 }
 
-// GetCopy - Get Copy of Viewer
-func (vm *ViewerMethod) GetCopy(twitchID ID) (Viewer, error) {
-	var v Viewer
-	src := vm.GetPtr(twitchID)
-	if src != nil {
-		src.CopyTo(&v)
-		return v, nil
-	}
-
-	err := fmt.Errorf("Unable to Find Viewer")
-	return v, err
-}
-
 // GetPtr - Get Viewer by ID
 func (vm *ViewerMethod) GetPtr(twitchID ID) *Viewer {
 	vm.lockmap()
@@ -147,9 +132,20 @@ func (vm *ViewerMethod) GetPtr(twitchID ID) *Viewer {
 	return vm.GetFromUser(*u)
 }
 
+// GetData - Get Data
+func (vm *ViewerMethod) GetData(twitchID ID) (ViewerData, error) {
+	v := vm.GetPtr(twitchID)
+
+	if v != nil {
+		return v.data, nil
+	}
+
+	return ViewerData{}, fmt.Errorf("Unable to Find Viewer")
+}
+
 func (vm *ViewerMethod) allocViewer(tid ID) *Viewer {
 	v := new(Viewer)
-	v.TwitchID = tid
+	v.data.TwitchID = tid
 	v.client = vm.client
 
 	vm.viewers[tid] = v
@@ -168,7 +164,7 @@ func (vm *ViewerMethod) GetFromUser(usr User) *Viewer {
 		v.SetUser(usr)
 	} else {
 		v = vm.allocViewer(usr.ID)
-		v.User = &usr
+		v.data.User = &usr
 	}
 
 	v.CreateChatter()
@@ -183,7 +179,7 @@ func (vm *ViewerMethod) findViewerByName(nick IrcNick) *Viewer {
 	nick = IrcNick(strings.ToLower(string(nick)))
 	for k := range vm.viewers {
 		v := vm.viewers[k]
-		if v.User.Name == nick {
+		if v.data.User.Name == nick {
 			return v
 		}
 	}
@@ -261,7 +257,7 @@ func (vm *ViewerMethod) UpdateFollowers(fList []ChannelFollow) {
 		v := vm.GetFromUser(*f.User)
 
 		v.Lockme()
-		v.Follower = &f
+		v.data.Follower = &f
 		v.Unlockme()
 	}
 
@@ -327,11 +323,11 @@ func (vm *ViewerMethod) MostUpToDateViewer(numFollowers int) (*Viewer, time.Time
 	for k := range vm.viewers {
 		v := vm.viewers[k]
 
-		if v.User == nil {
+		if v.data.User == nil {
 			continue
 		}
 
-		updatedTime := v.User.UpdatedAt()
+		updatedTime := v.data.User.UpdatedAt()
 		if updatedTime.After(oldTime) {
 			oldTime = updatedTime
 			mostRecentViewer = v
@@ -348,17 +344,18 @@ func (vm *ViewerMethod) SanityScan() error {
 
 	for k := range vm.viewers {
 		v := vm.viewers[k]
+		vd := v.GetData()
 
-		if k != v.TwitchID {
-			return fmt.Errorf("Twitch ID doesn't match %s\n\t %s != %s", v.GetNick(), k, v.TwitchID)
+		if k != vd.TwitchID {
+			return fmt.Errorf("Twitch ID doesn't match %s\n\t %s != %s", vd.GetNick(), k, vd.TwitchID)
 		}
 
-		if v.User == nil {
+		if vd.User == nil {
 			return fmt.Errorf("User is nil: %s", k)
 		}
 
-		if k != v.User.ID {
-			return fmt.Errorf("User ID doesn't match %s\n\t %s != %s", v.GetNick(), k, v.User.ID)
+		if k != vd.User.ID {
+			return fmt.Errorf("User ID doesn't match %s\n\t %s != %s", vd.GetNick(), k, vd.User.ID)
 		}
 	}
 

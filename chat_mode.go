@@ -11,7 +11,7 @@ type chatMode struct {
 	slowMode      bool
 	r9k           bool
 	lang          string
-	hosting       *Viewer
+	hosting       *ViewerData
 }
 
 func (cm chatMode) String() string {

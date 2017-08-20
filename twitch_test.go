@@ -1,6 +1,8 @@
 package twitch
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type DummyViewProvider struct {
 	Viewers map[ID]*Viewer
@@ -15,32 +17,22 @@ func (dvp *DummyViewProvider) AllKeys() []ID {
 	}
 	return myKeys
 }
-
+func (dvp *DummyViewProvider) Client() *Client      { return nil }
 func (dvp *DummyViewProvider) GetRoomID() ID        { return ID(0) }
 func (dvp *DummyViewProvider) GetRoomName() IrcNick { return "kimau" }
 func (dvp *DummyViewProvider) GetNick() IrcNick     { return "kimbot" }
-
-func (dvp *DummyViewProvider) GetCopy(twitchID ID) (Viewer, error) {
-	var v Viewer
-	src := dvp.GetPtr(twitchID)
-	if src != nil {
-		src.CopyTo(&v)
-		return v, nil
-	}
-
-	err := fmt.Errorf("Unable to Find Viewer")
-	return v, err
-}
 
 func (dvp *DummyViewProvider) GetPtr(id ID) *Viewer {
 	v, ok := dvp.Viewers[id]
 	if !ok {
 		v = &Viewer{
-			TwitchID: id,
-			User: &User{
-				ID:          id,
-				Name:        IrcNick("DummyName" + GenerateRandomString(4)),
-				DisplayName: "Name" + GenerateRandomString(6),
+			data: ViewerData{
+				TwitchID: id,
+				User: &User{
+					ID:          id,
+					Name:        IrcNick("DummyName" + GenerateRandomString(4)),
+					DisplayName: "Name" + GenerateRandomString(6),
+				},
 			},
 		}
 	}
@@ -48,20 +40,35 @@ func (dvp *DummyViewProvider) GetPtr(id ID) *Viewer {
 	return v
 }
 
+func (dvp *DummyViewProvider) Set(vd ViewerData) {
+	dvp.Viewers[vd.TwitchID] = &Viewer{data: vd}
+}
+
+func (dvp *DummyViewProvider) GetData(id ID) (ViewerData, error) {
+	v := dvp.GetPtr(id)
+	if v != nil {
+		return v.data, nil
+	}
+
+	return ViewerData{}, fmt.Errorf("Unable to find Viewer")
+}
+
 func (dvp *DummyViewProvider) Find(nick IrcNick) (*Viewer, error) {
 	for _, v := range dvp.Viewers {
-		if v.User.Name == nick {
+		if v.data.User.Name == nick {
 			return v, nil
 		}
 	}
 
 	id := generateDummyID()
 	v := &Viewer{
-		TwitchID: id,
-		User: &User{
-			ID:          id,
-			Name:        nick,
-			DisplayName: string(nick),
+		data: ViewerData{
+			TwitchID: id,
+			User: &User{
+				ID:          id,
+				Name:        nick,
+				DisplayName: string(nick),
+			},
 		},
 	}
 	return v, nil

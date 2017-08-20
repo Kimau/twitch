@@ -12,60 +12,41 @@ const (
 	debugViewerLock = false
 )
 
-// Viewer is basic Viewer
-type Viewer struct {
-	TwitchID ID `json:"id"`
-
+// ViewerData - Viewer Data
+type ViewerData struct {
+	TwitchID ID             `json:"id"`
 	User     *User          `json:"user"`    // Read Only - not enforced for perf reasons
 	Auth     *UserAuth      `json:"auth"`    // Read Only - not enforced for perf reasons
 	Chatter  *Chatter       `json:"chatter"` // Read Only - not enforced for perf reasons
 	Follower *ChannelFollow `json:"follow"`  // Read Only - not enforced for perf reasons
+}
 
+// Viewer is basic Viewer
+type Viewer struct {
+	data   ViewerData
 	mylock sync.Mutex
 	client *Client
 }
 
-// CopyTo - Deep copies in threadsafe fashion
-func (vw *Viewer) CopyTo(copyV *Viewer) {
+// GetData - Returns the Viewer Data
+func (vw *Viewer) GetData() ViewerData {
 	vw.Lockme()
 	defer vw.Unlockme()
+	return vw.data
+}
 
-	copyV.TwitchID = vw.TwitchID
-
-	if vw.User != nil {
-		u := *vw.User
-		copyV.User = &u
-	} else {
-		copyV.User = nil
-	}
-
-	if vw.Auth != nil {
-		a := *vw.Auth
-		copyV.Auth = &a
-	} else {
-		copyV.Auth = nil
-	}
-
-	if vw.Chatter != nil {
-		c := *vw.Chatter
-		copyV.Chatter = &c
-	} else {
-		copyV.Chatter = nil
-	}
-
-	if vw.Follower != nil {
-		f := *vw.Follower
-		copyV.Follower = &f
-	} else {
-		copyV.Follower = nil
-	}
+// SetData - Returns the Viewer Data
+func (vw *Viewer) SetData(vd ViewerData) {
+	vw.Lockme()
+	defer vw.Unlockme()
+	vw.data = vd
 }
 
 // Lockme - Lock The Viewer
 func (vw *Viewer) Lockme() {
 	vw.mylock.Lock()
 	if debugViewerLock {
-		fmt.Println("- LOCK -", vw.TwitchID)
+		fmt.Println("- LOCK -", vw.data.TwitchID)
 		debug.PrintStack()
 	}
 }
@@ -74,7 +55,7 @@ func (vw *Viewer) Lockme() {
 func (vw *Viewer) Unlockme() {
 	vw.mylock.Unlock()
 	if debugViewerLock {
-		fmt.Println("- UNLOCK -", vw.TwitchID)
+		fmt.Println("- UNLOCK -", vw.data.TwitchID)
 		debug.PrintStack()
 	}
 }
@@ -82,39 +63,41 @@ func (vw *Viewer) Unlockme() {
 //SetUser - Sets the new value in with lock
 func (vw *Viewer) SetUser(newVal User) {
 	vw.Lockme()
-	vw.User = &newVal
+	vw.data.User = &newVal
 	vw.Unlockme()
 }
 
 //SetAuth - Sets the new value in with lock
 func (vw *Viewer) SetAuth(newVal UserAuth) {
 	vw.Lockme()
-	vw.Auth = &newVal
+	vw.data.Auth = &newVal
 	vw.Unlockme()
 }
 
 //ClearAuth - Clear the Value with lock
 func (vw *Viewer) ClearAuth() {
 	vw.Lockme()
-	vw.Auth = nil
+	vw.data.Auth = nil
 	vw.Unlockme()
 }
 
 //SetChatter - Sets the new value in with lock
 func (vw *Viewer) SetChatter(newVal Chatter) {
 	vw.Lockme()
-	vw.Chatter = &newVal
+	vw.data.Chatter = &newVal
 	vw.Unlockme()
 }
 
 //CreateChatter - Creates Blank Chatter
-func (vw *Viewer) CreateChatter() {
+func (vw *Viewer) CreateChatter() Chatter {
 	vw.Lockme()
-	if vw.Chatter == nil {
-		log.Printf("Chat: ++Created++ %s", vw.User.Name)
-		vw.Chatter = &Chatter{
-			Nick:        vw.User.Name,
-			DisplayName: vw.User.DisplayName,
+	defer vw.Unlockme()
+
+	if vw.data.Chatter == nil {
+		log.Printf("Chat: ++Created++ %s", vw.data.User.Name)
+		vw.data.Chatter = &Chatter{
+			Nick:        vw.data.User.Name,
+			DisplayName: vw.data.User.DisplayName,
 			Bits:        0,
 
 			Mod:      false,
@@ -126,35 +109,39 @@ func (vw *Viewer) CreateChatter() {
 			LastActive:    time.Now(),
 		}
 	}
-	vw.Unlockme()
+
+	return *vw.data.Chatter
 }
 
 // Get will make Twitch API request with correct headers then attempt to decode JSON into jsonStruct
 func (vw *Viewer) Get(path string, jsonStruct interface{}) (string, error) {
-	return vw.client.Get(vw.Auth, path, jsonStruct)
+	return vw.client.Get(vw.data.Auth, path, jsonStruct)
 }
 
 // GetNick - Returns short username of current UserAuth
-func (vw *Viewer) GetNick() IrcNick {
-	if vw.User != nil {
-		return vw.User.Name
+func (vData *ViewerData) GetNick() IrcNick {
+	if vData.User != nil {
+		return vData.User.Name
 	}
 
-	if vw.Auth != nil && vw.Auth.Token != nil {
-		return vw.Auth.Token.Username
+	if vData.Auth != nil && vData.Auth.Token != nil {
+		return vData.Auth.Token.Username
 	}
 
-	return IrcNick("0x" + vw.TwitchID)
+	return IrcNick("0x" + vData.TwitchID)
 }
 
 // UpdateUser - Calls API to update User Data
 func (vw *Viewer) UpdateUser() error {
 	var err error
+	vw.Lockme()
 
-	vw.User, err = vw.client.User.Get(vw.TwitchID)
+	vw.data.User, err = vw.client.User.Get(vw.data.TwitchID)
 	if err != nil {
-		log.Printf("Failed to Get User Data for %s - %s", vw.TwitchID, err)
+		log.Printf("Failed to Get User Data for %s - %s", vw.data.TwitchID, err)
 	}
+
+	vw.Unlockme()
 
 	return nil
 }

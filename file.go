@@ -133,7 +133,7 @@ func (ah *Client) DumpViewers() error {
 
 	enc := gob.NewEncoder(f)
 	for _, vid := range ah.Viewers.AllKeys() {
-		v, _ := ah.Viewers.GetCopy(vid)
+		v, _ := ah.Viewers.GetData(vid)
 		err = enc.Encode(v)
 		if err != nil {
 			f.Close()
@@ -234,7 +234,7 @@ func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 		return nil, err
 	}
 	hvd.Timestamp = time.Unix(unixTime, 0)
-	hvd.ViewerData = make(map[ID]Viewer)
+	hvd.ViewerData = make(map[ID]ViewerData)
 
 	// Open file for Decoding
 	f, err := os.Open(filename)
@@ -246,7 +246,7 @@ func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 
 	// Pull out all Viewers
 	for {
-		v := Viewer{}
+		v := ViewerData{}
 		err := dec.Decode(&v)
 
 		if err != nil {
@@ -257,7 +257,6 @@ func LoadViewerDumpForAnalysis(filename string) (*HistoricViewerData, error) {
 		}
 
 		hvd.ViewerData[v.TwitchID] = v
-
 	}
 }
 

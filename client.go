@@ -118,8 +118,7 @@ func CreateTwitchClient(servingFromDomain string, reqScopes []string, roomToJoin
 	if err == nil {
 		if hvd != nil {
 			for k := range hvd.ViewerData {
-				v := hvd.ViewerData[k]
-				kb.Viewers.Set(&v)
+				kb.Viewers.Set(hvd.ViewerData[k])
 			}
 		}
 
@@ -197,10 +196,14 @@ func (ah *Client) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	tid := ID(cList[0])
 
 	// Try Find User
-	vwr, _ := ah.Viewers.GetCopy(tid)
+	vwr, err := ah.Viewers.GetData(tid)
+	if err != nil {
+		log.Println("Invalid User: ", tid, err)
+		return
+	}
 
 	// User isn't Auth start login
-	if vwr.Auth == nil || (vwr.Auth.checkCookie(c) == false) {
+	if vwr.Auth.checkCookie(c) == false {
 		log.Println("Cookie Failed", vwr.Auth, c)
 		ah.handleOAuthStart(w, req)
 		return
@@ -260,7 +263,7 @@ func (ah *Client) adminHasAuthed() {
 	if err != nil {
 		panic(fmt.Sprintf("Unable to find room [%s]\n%s", ah.RoomName, err))
 	}
-	ah.RoomID = roomViewer.TwitchID
+	ah.RoomID = roomViewer.GetData().TwitchID
 
 	// Get Badges
 	ah.Badges = CreateBadgeMethod(ah)
