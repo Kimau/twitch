@@ -16,7 +16,7 @@ import (
 const (
 	twitchBase     = "https://api.twitch.tv/kraken/"
 	twitchAuthURL  = "https://api.twitch.tv/kraken/oauth2/authorize?response_type=code&client_id=%s&redirect_uri=%s&scope=%s&state=%s"
-	redirStringURL = "http://%safter_signin/"
+	redirStringURL = "https://%safter_signin/"
 
 	pageLimit    = 100
 	debugOptions = true
