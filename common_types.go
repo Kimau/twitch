@@ -59,6 +59,6 @@ const (
 
 // IDFromInt - Convert ID from int to string ID
 // Some older API return a number
-func IDFromInt(id int) ID {
+func IDFromInt(id int64) ID {
 	return ID(fmt.Sprintf("%d", id))
 }
