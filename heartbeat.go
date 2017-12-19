@@ -107,6 +107,7 @@ func (heart *Heartbeat) beat(t time.Time) {
 	// Stream Viewer Count
 	sb, err := heart.client.Stream.GetStreamByUser(heart.client.RoomID)
 	fmt.Println(sb)
+	fmt.Println(err)
 
 	if err != nil || sb == nil || (sb.AverageFPS == 0) {
 		if prevDataPoint == nil || prevDataPoint.IsLive {
