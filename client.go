@@ -244,7 +244,9 @@ func (ah *Client) Get(au *UserAuth, path string, jsonStruct interface{}) (string
 
 	if jsonStruct != nil {
 		err = json.NewDecoder(resp.Body).Decode(jsonStruct)
-		log.Printf("JSON ERROR %s\n %s", path, err.Error())
+		if err != nil {
+			log.Printf("JSON ERROR %s\n %s", path, err.Error())
+		}
 		return "", err
 	}
 
