@@ -22,7 +22,7 @@ type StreamPreview struct {
 
 // StreamBody - Stream Data
 type StreamBody struct {
-	ResponseID  int     `json:"_id"`          //  23932774784,
+	ResponseID  int64   `json:"_id"`          //  23932774784,
 	Game        string  `json:"game"`         //  "BATMAN - The Telltale Series",
 	Community   string  `json:"community_id"` //  "Community Name"
 	Viewers     int     `json:"viewers"`      //  7254,
@@ -39,11 +39,11 @@ type StreamBody struct {
 
 // HostData - Host Instance
 type HostData struct {
-	HostID          int    `json:"host_id"`           //  649402
+	HostID          int64  `json:"host_id"`           //  649402
 	HostLogin       string `json:"host_login"`        //  groundz3r0
 	HostDisplayName string `json:"host_display_name"` //  GROUNDZ3R0
 
-	TargetID          int    `json:"target_id"`           //  259266
+	TargetID          int64  `json:"target_id"`           //  259266
 	TargetLogin       string `json:"target_login"`        //  epicdarksparky
 	TargetDisplayName string `json:"target_display_name"` //  EpicDarkspark
 }
