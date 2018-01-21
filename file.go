@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	dumpFilePattern = "./data/dump_%s_%d.bin"
+	dumpFilePattern = "./data/dump_%s.bin"
 	chatFilePattern = "./data/%s_chat.log"
 )
 
 var (
 	regexChatLogFileMatch = regexp.MustCompile("([[:word:]]*)_chat.log")
-	regexDumpFileMatch    = regexp.MustCompile("dump_([[:word:]]*)_([0-9]*).bin")
+	regexDumpFileMatch    = regexp.MustCompile("dump_([[:word:]]*).bin")
 	regexChatNewLog       = regexp.MustCompile("[\\+\\-]* New Log \\[([[:word:]]*)\\] [\\+\\-]* ([0-9].*)")
 )
 
@@ -126,7 +126,7 @@ func localIrcMsgStore() *os.File {
 
 // DumpViewers - Dump the Internal State to File
 func (ah *Client) DumpViewers() error {
-	f, err := os.Create(fmt.Sprintf(dumpFilePattern, ah.RoomName, time.Now().Unix()))
+	f, err := os.Create(fmt.Sprintf(dumpFilePattern, ah.RoomName))
 	if err != nil {
 		return err
 	}
